@@ -1,0 +1,4 @@
+ADD [5], 10
+SHL EAX, 0x10
+NOT EEX
+STOP
