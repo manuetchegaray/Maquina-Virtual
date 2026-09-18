@@ -19,8 +19,3 @@ void informarError(int codigo);
 /* Muestra las instrucciones de uso del ejecutable por línea de comandos. */
 void mostrarUso(void);
 
-/* Ejecuta una instrucción desde la dirección apuntada por IP. */
-int ejecutarInstruccion(MV *mv);
-
-/* Desensambla y muestra las instrucciones cargadas en memoria. */
-void disassembler(MV *mv);

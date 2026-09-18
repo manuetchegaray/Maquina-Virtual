@@ -51,6 +51,7 @@ int main(int argc, char *argv[]) {
 
     // 2. Inicializar MV con el tamaño de código detectado
     inicializarMV(&mv, tamCodigo);
+    init_funciones(&mv);
 
     printf("Programa '%s' cargado exitosamente (%u bytes de codigo).\n\n", 
            rutaArchivo, tamCodigo);

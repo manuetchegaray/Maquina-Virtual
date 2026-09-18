@@ -51,7 +51,7 @@
 #define ADD  0x11
 #define SUB  0x12
 #define MUL  0x13
-#define DIV  0x14
+#define DIV_  0x14
 #define CMP  0x15
 #define AND  0x16
 #define OR   0x17
@@ -68,7 +68,7 @@
 #define SYS  0x00
 #define JMP  0x01
 #define JP   0x02
-#define JN   0x03
+#define JN_   0x03
 #define JZ   0x04
 #define JC   0x05
 #define JV   0x06
@@ -128,22 +128,16 @@ typedef struct {
     tOperacion func;
 } tfunc;
 
-typedef struct {
+struct MV {
     uint8_t  mem[MEMORY_SIZE];
     uint32_t reg[CANTREG];
     Segmento tabla[SEG_TABLE];
     tfunc    FUNCIONES[CANT_INSTR];
-} MV;
+};
 
-int  cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo);
-void inicializarMV(MV *mv, uint16_t tamCodigo);
-int  ipEnSegmentoDeCodigo(MV *mv);
-void informarError(int codigo);
-void mostrarUso(void);
 
 /* mv.c : tabla de funciones y motor */
 void init_funciones(MV *mv);
-void init_registros(MV *mv);
 int  ejecutarInstruccion(MV *mv);
 void disassembler(MV *mv);
 
@@ -152,7 +146,7 @@ int mov(MV *mv);
 int add(MV *mv);
 int sub(MV *mv);
 int mul(MV *mv);
-int div(MV *mv);
+int div_(MV *mv);
 int cmp(MV *mv);
 int and(MV *mv);
 int or(MV *mv);
@@ -169,7 +163,7 @@ int rnd(MV *mv);
 int sys(MV *mv);
 int jmp(MV *mv);
 int jp(MV *mv);
-int jn(MV *mv);
+int jn_(MV *mv);
 int jz(MV *mv);
 int jc(MV *mv);
 int jv(MV *mv);

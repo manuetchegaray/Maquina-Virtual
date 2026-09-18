@@ -3,6 +3,8 @@
 #include <string.h>
 #include "mv.h"
 
+//Carga la tabla de instrucciones: para cada código de operación
+//Los códigos que no existen quedan con func = NULL
 
 void init_funciones(MV *mv)
 {
@@ -16,8 +18,8 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[SUB].func = sub;
     strcpy(mv->FUNCIONES[MUL].nombre, "MUL");
     mv->FUNCIONES[MUL].func = mul;
-    strcpy(mv->FUNCIONES[DIV].nombre, "DIV");
-    mv->FUNCIONES[DIV].func = div;
+    strcpy(mv->FUNCIONES[DIV_].nombre, "DIV");
+    mv->FUNCIONES[DIV_].func = div_;
     strcpy(mv->FUNCIONES[CMP].nombre, "CMP");
     mv->FUNCIONES[CMP].func = cmp;
     strcpy(mv->FUNCIONES[AND].nombre, "AND");
@@ -48,13 +50,13 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[JMP].func = jmp;
     strcpy(mv->FUNCIONES[JP].nombre, "JP");
     mv->FUNCIONES[JP].func = jp;
-    strcpy(mv->FUNCIONES[JN].nombre, "JN");
-    mv->FUNCIONES[JN].func = jn;
+    strcpy(mv->FUNCIONES[JN_].nombre, "JN");
+    mv->FUNCIONES[JN_].func = jn_;
     strcpy(mv->FUNCIONES[JZ].nombre, "JZ");
     mv->FUNCIONES[JZ].func = jz;
-    strcpy(mv->FUNCIONES[JC].nombre, "JN");
+    strcpy(mv->FUNCIONES[JC].nombre, "JC");
     mv->FUNCIONES[JC].func = jc;
-    strcpy(mv->FUNCIONES[JV].nombre, "JN");
+    strcpy(mv->FUNCIONES[JV].nombre, "JV");
     mv->FUNCIONES[JV].func = jv;
     strcpy(mv->FUNCIONES[JNP].nombre, "JNP");
     mv->FUNCIONES[JNP].func = jnp;
@@ -69,37 +71,117 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[STOP].func = stop;
 }
 
-void init_registros(MV *mv)
+//Devuelve el nombre de un registro a partir de su código (0..31).
+
+static const char *NOMBRE_REG[CANTREG] = {
+    [IP]  = "IP",  [OPC] = "OPC", [OP1] = "OP1", [OP2] = "OP2",
+    [LAR] = "LAR", [MAR] = "MAR", [MBR] = "MBR",
+    [EAX] = "EAX", [EBX] = "EBX", [ECX] = "ECX",
+    [EDX] = "EDX", [EEX] = "EEX", [EFX] = "EFX",
+    [AC]  = "AC",  [CC]  = "CC",
+    [CS]  = "CS",  [DS]  = "DS"
+};
+
+const char *nombreRegistro(uint8_t codigo)
 {
-    strcpy(mv->reg[IP], "IP");
-    strcpy(mv->reg[OPC], "OPC");
-    strcpy(mv->reg[OP1], "OP1");
-    strcpy(mv->reg[OP2], "OP2");
-
-    strcpy(mv->reg[LAR], "LAR");
-    strcpy(mv->reg[MAR], "MAR");
-    strcpy(mv->reg[MBR], "MBR");
-
-
-    // Bloque de registros generales
-    strcpy(mv->reg[EAX], "EAX");
-    strcpy(mv->reg[EBX], "EBX");
-    strcpy(mv->reg[ECX], "ECX");
-    strcpy(mv->reg[EDX], "EDX");
-    strcpy(mv->reg[EEX], "EEX");
-    strcpy(mv->reg[EFX], "EFX");
-
-    // Acumulador y código de condición
-    strcpy(mv->reg[AC], "AC");
-    strcpy(mv->reg[CC], "CC");
-
-    // Segmentos
-    strcpy(mv->reg[CS], "CS");
-    strcpy(mv->reg[DS], "DS");
-
-    mv->reg[ECX] = -1;
+    codigo &= 0x1F;   /* por los 3 bits reservados del byte de registro */
+    return NOMBRE_REG[codigo] != NULL ? NOMBRE_REG[codigo] : "?";
 }
 
+
+/* ===== Dos operandos ===== */
+int mov(MV *mv)   { 
+    return OK; 
+}
+int add(MV *mv){ 
+    return OK; 
+}
+int sub(MV *mv){ 
+    return OK; 
+}
+int mul(MV *mv){ 
+    return OK; 
+}
+int div_(MV *mv){ 
+    return OK; 
+}
+int cmp(MV *mv) { 
+    return OK; 
+}
+int and(MV *mv)  { 
+    return OK; 
+}
+int or(MV *mv)  { 
+    return OK; 
+}
+int xor(MV *mv) { 
+    return OK; 
+}
+int swap(MV *mv) { 
+    return OK; 
+}
+int shl(MV *mv){ 
+    return OK; 
+}
+int shr(MV *mv)  { 
+    return OK; 
+}
+int sar(MV *mv) { 
+    return OK; 
+}
+int ldl(MV *mv){ 
+    return OK; 
+}
+int ldh(MV *mv) { 
+    return OK; 
+}
+int rnd(MV *mv) { 
+    return OK; 
+}
+
+/* ===== Un operando ===== */
+int sys(MV *mv) { 
+    return OK; 
+}
+int jmp(MV *mv)  { 
+    return OK; 
+}
+int jp(MV *mv) { 
+    return OK; 
+}
+int jn_(MV *mv){ 
+    return OK; 
+}
+int jz(MV *mv)  { 
+    return OK; 
+}
+int jc(MV *mv) { 
+    return OK;
+}
+int jv(MV *mv) { 
+    return OK; 
+}
+int jnp(MV *mv){ 
+    return OK; 
+}
+int jnn(MV *mv) { 
+    return OK; 
+}
+int jnz(MV *mv) { 
+    return OK; 
+}
+int not(MV *mv){ 
+    return OK; 
+}
+
+/* ===== Sin operandos ===== */
+int stop(MV *mv)
+{
+    mv->reg[IP] = 0xFFFFFFFF;
+    return OK;
+}
+
+/* Ejecuta una instrucción desde la dirección apuntada por IP. */
 int ejecutarInstruccion(MV *mv)
 {
     (void)mv;
@@ -107,6 +189,7 @@ int ejecutarInstruccion(MV *mv)
     return ERR_INSTRUCCION;
 }
  
+/* Desensambla y muestra las instrucciones cargadas en memoria. */
 void disassembler(MV *mv)
 {
     (void)mv;

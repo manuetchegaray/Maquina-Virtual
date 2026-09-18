@@ -5,7 +5,6 @@
 void inicializarMV(MV *mv, uint16_t tamCodigo)
 {
     // 1. Limpiar memoria física y registros a cero
-    memset(mv->mem, 0, MEMORY_SIZE);
     memset(mv->reg, 0, sizeof(mv->reg));
 
     // 2. Configurar Segmento de Código (empieza en 0)
@@ -59,6 +58,9 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo)
         fclose(arch);
         return ERR_TAMANIO;
     }
+
+    memset(mv->mem, 0, MEMORY_SIZE);
+
 
     /* el segmento de codigo arranca al comienzo de la memoria */
     if (fread(mv->mem, 1, tam, arch) != tam) {
