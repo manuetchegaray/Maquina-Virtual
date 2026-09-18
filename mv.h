@@ -143,6 +143,7 @@ void mostrarUso(void);
 
 /* mv.c : tabla de funciones y motor */
 void init_funciones(MV *mv);
+void init_registros(MV *mv);
 int  ejecutarInstruccion(MV *mv);
 void disassembler(MV *mv);
 
@@ -151,7 +152,7 @@ int mov(MV *mv);
 int add(MV *mv);
 int sub(MV *mv);
 int mul(MV *mv);
-int div_(MV *mv);
+int div(MV *mv);
 int cmp(MV *mv);
 int and(MV *mv);
 int or(MV *mv);
@@ -168,14 +169,14 @@ int rnd(MV *mv);
 int sys(MV *mv);
 int jmp(MV *mv);
 int jp(MV *mv);
-int jn_(MV *mv);
+int jn(MV *mv);
 int jz(MV *mv);
 int jc(MV *mv);
 int jv(MV *mv);
 int jnp(MV *mv);
 int jnn(MV *mv);
 int jnz(MV *mv);
-int not_(MV *mv);
+int not(MV *mv);
  
 /* sin operandos */
 int stop(MV *mv);

@@ -16,8 +16,8 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[SUB].func = sub;
     strcpy(mv->FUNCIONES[MUL].nombre, "MUL");
     mv->FUNCIONES[MUL].func = mul;
-    strcpy(mv->FUNCIONES[DIV_].nombre, "DIV");
-    mv->FUNCIONES[DIV_].func = div_;
+    strcpy(mv->FUNCIONES[DIV].nombre, "DIV");
+    mv->FUNCIONES[DIV].func = div;
     strcpy(mv->FUNCIONES[CMP].nombre, "CMP");
     mv->FUNCIONES[CMP].func = cmp;
     strcpy(mv->FUNCIONES[AND].nombre, "AND");
@@ -48,8 +48,8 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[JMP].func = jmp;
     strcpy(mv->FUNCIONES[JP].nombre, "JP");
     mv->FUNCIONES[JP].func = jp;
-    strcpy(mv->FUNCIONES[JN_].nombre, "JN");
-    mv->FUNCIONES[JN_].func = jn_;
+    strcpy(mv->FUNCIONES[JN].nombre, "JN");
+    mv->FUNCIONES[JN].func = jn;
     strcpy(mv->FUNCIONES[JZ].nombre, "JZ");
     mv->FUNCIONES[JZ].func = jz;
     strcpy(mv->FUNCIONES[JC].nombre, "JN");
@@ -62,52 +62,52 @@ void init_funciones(MV *mv)
     mv->FUNCIONES[JNZ].func = jnz;
     strcpy(mv->FUNCIONES[JNN].nombre, "JNN");
     mv->FUNCIONES[JNN].func = jnn;
-    strcpy(mv->FUNCIONES[NOT_].nombre, "NOT");
-    mv->FUNCIONES[NOT_].func = not_;
+    strcpy(mv->FUNCIONES[NOT].nombre, "NOT");
+    mv->FUNCIONES[NOT].func = not;
 
     strcpy(mv->FUNCIONES[STOP].nombre, "STOP");
     mv->FUNCIONES[STOP].func = stop;
 }
 
-void init_regs(tmv *mv)
+void init_registros(MV *mv)
 {
-    strcpy(mv->REGS[IP].nombre, "IP");
-    strcpy(mv->REGS[OPC].nombre, "OPC");
-    strcpy(mv->REGS[OP1].nombre, "OP1");
-    strcpy(mv->REGS[OP2].nombre, "OP2");
+    strcpy(mv->reg[IP], "IP");
+    strcpy(mv->reg[OPC], "OPC");
+    strcpy(mv->reg[OP1], "OP1");
+    strcpy(mv->reg[OP2], "OP2");
 
-    strcpy(mv->REGS[LAR].nombre, "LAR");
-    strcpy(mv->REGS[MAR].nombre, "MAR");
-    strcpy(mv->REGS[MBR].nombre, "MBR");
+    strcpy(mv->reg[LAR], "LAR");
+    strcpy(mv->reg[MAR], "MAR");
+    strcpy(mv->reg[MBR], "MBR");
 
 
     // Bloque de registros generales
-    strcpy(mv->REGS[EAX].nombre, "EAX");
-    strcpy(mv->REGS[EBX].nombre, "EBX");
-    strcpy(mv->REGS[ECX].nombre, "ECX");
-    strcpy(mv->REGS[EDX].nombre, "EDX");
-    strcpy(mv->REGS[EEX].nombre, "EEX");
-    strcpy(mv->REGS[EFX].nombre, "EFX");
+    strcpy(mv->reg[EAX], "EAX");
+    strcpy(mv->reg[EBX], "EBX");
+    strcpy(mv->reg[ECX], "ECX");
+    strcpy(mv->reg[EDX], "EDX");
+    strcpy(mv->reg[EEX], "EEX");
+    strcpy(mv->reg[EFX], "EFX");
 
     // Acumulador y código de condición
-    strcpy(mv->REGS[AC].nombre, "AC");
-    strcpy(mv->REGS[CC].nombre, "CC");
+    strcpy(mv->reg[AC], "AC");
+    strcpy(mv->reg[CC], "CC");
 
     // Segmentos
-    strcpy(mv->REGS[CS].nombre, "CS");
-    strcpy(mv->REGS[DS].nombre, "DS");
+    strcpy(mv->reg[CS], "CS");
+    strcpy(mv->reg[DS], "DS");
 
-    mv->REGS[ECX].dato = -1;
+    mv->reg[ECX] = -1;
 }
 
-int ejecutarInstruccion(mv *mv)
+int ejecutarInstruccion(MV *mv)
 {
     (void)mv;
     printf("ejecutarInstruccion() todavia no esta implementada.\n");
     return ERR_INSTRUCCION;
 }
  
-void disassembler(mv *mv)
+void disassembler(MV *mv)
 {
     (void)mv;
     printf("disassembler() todavia no esta implementado.\n");
