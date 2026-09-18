@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "mv.h"
-
+#include "memoria.h"
 //Carga la tabla de instrucciones: para cada código de operación
 //Los códigos que no existen quedan con func = NULL
 
@@ -181,14 +180,47 @@ int stop(MV *mv)
     return OK;
 }
 
-/* Ejecuta una instrucción desde la dirección apuntada por IP. */
+//Ejecuta UNA instrucción, la que apunta IP:
+//   1. traduce IP (dirección lógica) a dirección física
+//  2. decodifica la instrucción y carga OPC, OP1 y OP2
+//   3. avanza IP a la instrucción siguiente
+//   4. llama a la función de la instrucción (mov, add, ...) 
+
 int ejecutarInstruccion(MV *mv)
 {
-    (void)mv;
-    printf("ejecutarInstruccion() todavia no esta implementada.\n");
-    return ERR_INSTRUCCION;
+    uint16_t seg = (uint16_t)(mv->reg[IP] >> 16);
+    uint16_t off = (uint16_t)(mv->reg[IP] & 0xFFFF);
+    uint16_t dir = mv->tabla[seg].base + off;    /* dirección física */
+
+    uint8_t  opc;
+    uint32_t opA, opB;
+    int tam = decodificarInstruccion(mv, dir, &opc, &opA, &opB);
+
+    mv->reg[OPC] = opc;
+    mv->reg[OP1] = opA;
+    mv->reg[OP2] = opB;
+
+    mv->reg[IP] += tam;     /* IP apunta a la próxima instrucción */
+
+    if (mv->FUNCIONES[opc].func == NULL)
+        return ERR_INSTRUCCION;
+
+    return mv->FUNCIONES[opc].func(mv);
 }
  
+// Ejecuta instrucciones mientras IP esté dentro
+//del segmento de código. Corta si alguna devuelve un error.
+//STOP pone IP en -1, así que también corta el ciclo. 
+int ejecutarPrograma(MV *mv)
+{
+    int err = OK;
+
+    while (err == OK && ipEnSegmentoDeCodigo(mv))
+        err = ejecutarInstruccion(mv);
+
+    return err;
+}
+
 /* Desensambla y muestra las instrucciones cargadas en memoria. */
 void disassembler(MV *mv)
 {

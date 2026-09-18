@@ -121,15 +121,4 @@ void mostrarUso(void)
     printf("  -d            muestra el codigo desensamblado\n");
 }
 
-int ejecutarInstruccion(MV *mv)
-{
-    (void)mv;
-    printf("ejecutarInstruccion() todavia no esta implementada.\n");
-    return ERR_INSTRUCCION;
-}
 
-void disassembler(MV *mv)
-{
-    (void)mv;
-    printf("disassembler() todavia no esta implementado.\n");
-}

@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     } else {
         printf("Iniciando ejecucion...\n");
         // Proximamente: Ciclo Fetch-Decode-Execute
-        res = ejecutarInstruccion(&mv);
+        res = ejecutarPrograma(&mv);
         if (res != OK) {
             informarError(res);
         }

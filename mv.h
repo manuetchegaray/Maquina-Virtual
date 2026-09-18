@@ -139,6 +139,7 @@ struct MV {
 /* mv.c : tabla de funciones y motor */
 void init_funciones(MV *mv);
 int  ejecutarInstruccion(MV *mv);
+int ejecutarPrograma(MV *mv);
 void disassembler(MV *mv);
 
 /* dos operandos */
