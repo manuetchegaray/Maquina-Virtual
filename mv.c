@@ -5,8 +5,7 @@
 //Carga la tabla de instrucciones: para cada código de operación
 //Los códigos que no existen quedan con func = NULL
 
-void init_funciones(MV *mv)
-{
+void init_funciones(MV *mv){
     memset(mv->FUNCIONES, 0, sizeof(mv->FUNCIONES));
     
     strcpy(mv->FUNCIONES[MOV].nombre, "MOV");
@@ -81,8 +80,7 @@ static const char *NOMBRE_REG[CANTREG] = {
     [CS]  = "CS",  [DS]  = "DS"
 };
 
-const char *nombreRegistro(uint8_t codigo)
-{
+const char *nombreRegistro(uint8_t codigo){
     codigo &= 0x1F;   /* por los 3 bits reservados del byte de registro */
     return NOMBRE_REG[codigo] != NULL ? NOMBRE_REG[codigo] : "?";
 }
@@ -174,8 +172,7 @@ int not(MV *mv){
 }
 
 /* ===== Sin operandos ===== */
-int stop(MV *mv)
-{
+int stop(MV *mv){
     mv->reg[IP] = 0xFFFFFFFF;
     return OK;
 }
@@ -186,8 +183,7 @@ int stop(MV *mv)
 //   3. avanza IP a la instrucción siguiente
 //   4. llama a la función de la instrucción (mov, add, ...) 
 
-int ejecutarInstruccion(MV *mv)
-{
+int ejecutarInstruccion(MV *mv){
     uint16_t seg = (uint16_t)(mv->reg[IP] >> 16);
     uint16_t off = (uint16_t)(mv->reg[IP] & 0xFFFF);
     uint16_t dir = mv->tabla[seg].base + off;    /* dirección física */
@@ -211,8 +207,7 @@ int ejecutarInstruccion(MV *mv)
 // Ejecuta instrucciones mientras IP esté dentro
 //del segmento de código. Corta si alguna devuelve un error.
 //STOP pone IP en -1, así que también corta el ciclo. 
-int ejecutarPrograma(MV *mv)
-{
+int ejecutarPrograma(MV *mv){
     int err = OK;
 
     while (err == OK && ipEnSegmentoDeCodigo(mv))
@@ -221,9 +216,121 @@ int ejecutarPrograma(MV *mv)
     return err;
 }
 
-/* Desensambla y muestra las instrucciones cargadas en memoria. */
-void disassembler(MV *mv)
-{
-    (void)mv;
-    printf("disassembler() todavia no esta implementado.\n");
+
+
+/* Lee 'tam' bytes de memoria a partir de 'dir' y los arma en un entero
+ * (el primer byte es el más significativo).
+ * Sirve para leer el valor "crudo" de un operando tal cual está en memoria. */
+static uint32_t leerBytes(MV *mv, uint16_t dir, int tam){
+    uint32_t valor = 0;
+    for (int i = 0; i < tam; i++)
+        valor = (valor << 8) | mv->mem[dir + i];
+    return valor;
 }
+
+/* Decodifica la instrucción que empieza en la dirección física 'dir'.
+ * Devuelve:
+ *   opc  -> código de operación (5 bits)
+ *   opA  -> operando A con el formato de OP1: tipo en el byte alto,
+ *            valor crudo en los 3 bytes bajos (0 si no existe)
+ *   opB  -> operando B con el mismo formato (0 si no existe)
+ * y como resultado de la función, el tamaño total de la instrucción en bytes. */
+
+int decodificarInstruccion(MV *mv, uint16_t dir, uint8_t *opc, uint32_t *opA, uint32_t *opB){
+    uint8_t primer = mv->mem[dir];
+    uint8_t tipoA, tipoB;
+    uint16_t pos = dir + 1;     // los operandos empiezan después del primer byte 
+
+    *opc = COD_OP(primer);
+
+    if (*opc & 0x10) {                 // 0x10..0x1F: dos operandos 
+        tipoB = TIPO_B(primer);
+        tipoA = TIPO_A2(primer);
+    } else if (*opc == STOP) {         // sin operandos 
+        tipoB = TIPO_NINGUNO;
+        tipoA = TIPO_NINGUNO;
+    } else {                           //0x00..0x0E: un operando 
+        tipoB = TIPO_NINGUNO;
+        tipoA = TIPO_A1(primer);
+    }
+
+    //en memoria van en orden inverso: primero B, después A.
+    //El tamaño en bytes de cada operando coincide con su tipo. 
+    *opB = ((uint32_t)tipoB << 24) | leerBytes(mv, pos, tipoB);
+    pos += tipoB;
+    *opA = ((uint32_t)tipoA << 24) | leerBytes(mv, pos, tipoA);
+    pos += tipoA;
+
+    if (tipoB == TIPO_NINGUNO) *opB = 0;
+    if (tipoA == TIPO_NINGUNO) *opA = 0;
+
+    return pos - dir;
+}
+
+
+/* Imprime un operando (en formato OP1/OP2) como en Assembler:
+ *   registro   -> EAX
+ *   inmediato  -> 10     (decimal, con signo)
+ *   memoria    -> [DS+5] (registro base + desplazamiento con signo) */
+
+static void imprimirOperando(uint32_t op)
+{
+    uint8_t  tipo  = op >> 24;
+    uint32_t valor = op & 0x00FFFFFF;
+
+    switch (tipo) {
+        case TIPO_REGISTRO:
+            printf("%s", nombreRegistro((uint8_t)valor));
+            break;
+        case TIPO_INMEDIATO:
+            printf("%d", (int16_t)valor);
+            break;
+        case TIPO_MEMORIA: {
+            int16_t offset = (int16_t)(valor >> 8);   /* 2 bytes altos */
+            uint8_t reg    = (uint8_t)(valor & 0xFF); /* byte bajo */
+            printf("[%s", nombreRegistro(reg));
+            if (offset > 0)      printf("+%d", offset);
+            else if (offset < 0) printf("%d", offset); /* el %d ya pone el '-' */
+            printf("]");
+            break;
+        }
+    }
+}
+
+// Recorre el segmento de código y muestra cada instrucción con el formato
+//[0000] B1 00 0A 00 05 9B | ADD [DS+5], 10 
+void disassembler(MV *mv){
+    uint16_t dir = mv->tabla[SEG_CODIGO].base;
+    uint16_t fin = dir + mv->tabla[SEG_CODIGO].tamanio;
+
+    while (dir < fin) {
+        uint8_t  opc;
+        uint32_t opA, opB;
+        int tam = decodificarInstruccion(mv, dir, &opc, &opA, &opB);
+
+        /* dirección física y bytes de la instrucción */
+        printf("[%04X]", dir);
+        for (int i = 0; i < tam; i++)
+            printf(" %02X", mv->mem[dir + i]);
+
+        /* mnemónico */
+        if (mv->FUNCIONES[opc].func == NULL)
+            printf(" | ???");
+        else
+            printf(" | %s", mv->FUNCIONES[opc].nombre);
+
+        /* operandos */
+        if (opA != 0) {
+            printf(" ");
+            imprimirOperando(opA);
+        }
+        if (opB != 0) {
+            printf(", ");
+            imprimirOperando(opB);
+        }
+        printf("\n");
+
+        dir += tam;
+    }
+}
+

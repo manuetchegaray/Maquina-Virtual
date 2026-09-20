@@ -2,6 +2,10 @@
 #include <string.h>
 #include "memoria.h"
 
+
+MV mv;
+uint16_t tamCodigo = 0;
+
 static void imprimirEstado(const MV *mv) {
     printf("=== Tabla de Segmentos ===\n");
     for (unsigned i = 0; i < SEG_TABLE; i++) {
@@ -39,8 +43,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    MV mv;
-    uint16_t tamCodigo = 0;
 
     // 1. Cargar ejecutable desde disco
     vm_error_t res = cargarPrograma(&mv, rutaArchivo, &tamCodigo);
