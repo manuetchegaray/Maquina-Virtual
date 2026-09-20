@@ -85,90 +85,390 @@ const char *nombreRegistro(uint8_t codigo){
     return NOMBRE_REG[codigo] != NULL ? NOMBRE_REG[codigo] : "?";
 }
 
+/* Lee los dos operandos de la instrucción actual. */
+static int leerAB(MV *mv, int32_t *a, int32_t *b){
+    int err = leerOperando(mv, mv->reg[OP1], a);
+
+    if (err != OK)
+        return err;
+
+    return leerOperando(mv, mv->reg[OP2], b);
+}
 
 /* ===== Dos operandos ===== */
-int mov(MV *mv)   { 
-    return OK; 
+
+/* MOV A, B  ->  A = B.  Actualiza CC. */
+int mov(MV *mv){
+    int32_t b;
+    int err = leerOperando(mv, mv->reg[OP2], &b);
+
+    if (err != OK)
+        return err;
+
+    err = escribirOperando(mv, mv->reg[OP1], b);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, b);
+    return OK;
 }
-int add(MV *mv){ 
-    return OK; 
+
+/* ADD A, B  ->  A = A + B.  Actualiza CC (N, Z, C, V). */
+int add(MV *mv){
+    int32_t a, b;
+    int64_t res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int64_t)a + b;
+    err = escribirOperando(mv, mv->reg[OP1], (int32_t)res);
+    if (err != OK)
+        return err;
+
+    actualizarCC(mv, res);
+    return OK;
 }
-int sub(MV *mv){ 
-    return OK; 
+
+/* SUB A, B  ->  A = A - B.  Actualiza CC (N, Z, C, V). */
+int sub(MV *mv){
+    int32_t a, b;
+    int64_t res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int64_t)a - b;
+    err = escribirOperando(mv, mv->reg[OP1], (int32_t)res);
+    if (err != OK)
+        return err;
+
+    actualizarCC(mv, res);
+    return OK;
 }
-int mul(MV *mv){ 
-    return OK; 
+
+/* MUL A, B  ->  A = A * B.  Actualiza CC (N, Z, C, V). */
+int mul(MV *mv){
+    int32_t a, b;
+    int64_t res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int64_t)a * b;
+    err = escribirOperando(mv, mv->reg[OP1], (int32_t)res);
+    if (err != OK)
+        return err;
+
+    actualizarCC(mv, res);
+    return OK;
 }
-int div_(MV *mv){ 
-    return OK; 
+
+/* DIV A, B  ->  A = A / B (cociente), AC = A % B (resto).
+ * Si B es 0 devuelve ERR_DIV_CERO.  Actualiza CC. */
+int div_(MV *mv){
+    int32_t a, b;
+    int64_t cociente, resto;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    if (b == 0)
+        return ERR_DIV_CERO;
+
+    /* el caso INT_MIN / -1 se hace en 64 bits para que no aborte el programa */
+    cociente = (int64_t)a / b;
+    resto    = (int64_t)a % b;
+
+    err = escribirOperando(mv, mv->reg[OP1], (int32_t)cociente);
+    if (err != OK)
+        return err;
+
+    mv->reg[AC] = (uint32_t)(int32_t)resto;
+    actualizarCC(mv, cociente);
+    return OK;
 }
-int cmp(MV *mv) { 
-    return OK; 
+
+/* CMP A, B  ->  calcula A - B pero NO guarda el resultado, solo actualiza CC. */
+int cmp(MV *mv){
+    int32_t a, b;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    actualizarCC(mv, (int64_t)a - b);
+    return OK;
 }
-int and(MV *mv)  { 
-    return OK; 
+
+/* AND A, B  ->  A = A & B (bit a bit).  Actualiza CC. */
+int and(MV *mv){
+    int32_t a, b, res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int32_t)((uint32_t)a & (uint32_t)b);
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
+    return OK;
 }
-int or(MV *mv)  { 
-    return OK; 
+
+/* OR A, B  ->  A = A | B (bit a bit).  Actualiza CC. */
+int or(MV *mv){
+    int32_t a, b, res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int32_t)((uint32_t)a | (uint32_t)b);
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
+    return OK;
 }
-int xor(MV *mv) { 
-    return OK; 
+
+/* XOR A, B  ->  A = A ^ B (bit a bit).  Actualiza CC. */
+int xor(MV *mv){
+    int32_t a, b, res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    res = (int32_t)((uint32_t)a ^ (uint32_t)b);
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
+    return OK;
 }
-int swap(MV *mv) { 
-    return OK; 
+
+/* SWAP A, B  ->  intercambia los valores de A y B.  Actualiza CC. */
+int swap(MV *mv){
+    int32_t a, b;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    err = escribirOperando(mv, mv->reg[OP1], b);
+    if (err != OK)
+        return err;
+
+    err = escribirOperando(mv, mv->reg[OP2], a);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, b);
+    return OK;
 }
-int shl(MV *mv){ 
-    return OK; 
+
+/* SHL A, B  ->  A = A << B (entran ceros por la derecha).  Actualiza CC. */
+int shl(MV *mv){
+    int32_t a, b;
+    int64_t res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    if (b < 0 || b > 63)
+        res = 0;
+    else
+        res = (int64_t)((uint64_t)(uint32_t)a << b);
+
+    err = escribirOperando(mv, mv->reg[OP1], (int32_t)res);
+    if (err != OK)
+        return err;
+
+    actualizarCC(mv, res);
+    return OK;
 }
-int shr(MV *mv)  { 
-    return OK; 
+
+/* SHR A, B  ->  A = A >> B (lógico: entran ceros por la izquierda).  Actualiza CC. */
+int shr(MV *mv){
+    int32_t a, b, res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    if (b < 0 || b > 31)
+        res = 0;
+    else
+        res = (int32_t)((uint32_t)a >> b);
+
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
+    return OK;
 }
-int sar(MV *mv) { 
-    return OK; 
+
+/* SAR A, B  ->  A = A >> B (aritmético: se replica el bit de signo).  Actualiza CC. */
+int sar(MV *mv){
+    int32_t a, b, res;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    if (b < 0)
+        res = a;
+    else if (b > 31)
+        res = (a < 0) ? -1 : 0;                /* solo queda el signo */
+    else if (a < 0)
+        res = (int32_t)~(~(uint32_t)a >> b);   /* rellena con unos */
+    else
+        res = (int32_t)((uint32_t)a >> b);
+
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
+    return OK;
 }
-int ldl(MV *mv){ 
-    return OK; 
+
+/* LDL A, B  ->  copia los 16 bits bajos de B en los 16 bits bajos de A.
+ * La parte alta de A no se toca.  No afecta CC. */
+int ldl(MV *mv){
+    int32_t a, b;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    return escribirOperando(mv, mv->reg[OP1],(int32_t)(((uint32_t)a & 0xFFFF0000) |((uint32_t)b & 0x0000FFFF)));
 }
-int ldh(MV *mv) { 
-    return OK; 
+
+/* LDH A, B  ->  copia los 16 bits bajos de B en los 16 bits altos de A.
+ * La parte baja de A no se toca.  No afecta CC. */
+int ldh(MV *mv){
+    int32_t a, b;
+    int err = leerAB(mv, &a, &b);
+
+    if (err != OK)
+        return err;
+
+    return escribirOperando(mv, mv->reg[OP1],
+                            (int32_t)(((uint32_t)a & 0x0000FFFF) |
+                                      ((uint32_t)b << 16)));
 }
-int rnd(MV *mv) { 
-    return OK; 
+
+/* RND A, B  ->  A = número aleatorio entre 0 y B.  No afecta CC. */
+int rnd(MV *mv){
+    int32_t b;
+    int32_t res;
+    int err = leerOperando(mv, mv->reg[OP2], &b);
+
+    if (err != OK)
+        return err;
+
+    if (b <= 0)
+        res = 0;
+    else
+        res = rand() % (b + 1);
+
+    return escribirOperando(mv, mv->reg[OP1], res);
 }
 
 /* ===== Un operando ===== */
+
+/* Si se cumple la condición, pone IP en la posición indicada por el operando A
+ * (un desplazamiento dentro del segmento de código). */
+static int saltarSi(MV *mv, int condicion){
+    int32_t destino;
+    int err;
+
+    if (!condicion)
+        return OK;                      /* no salta: IP ya apunta a la siguiente */
+
+    err = leerOperando(mv, mv->reg[OP1], &destino);
+    if (err != OK)
+        return err;
+
+    mv->reg[IP] = (mv->reg[CS] & 0xFFFF0000) | ((uint32_t)destino & 0xFFFF);
+    return OK;
+}
+
 int sys(MV *mv) { 
     return OK; 
 }
-int jmp(MV *mv)  { 
-    return OK; 
+/* JMP A  ->  salto incondicional. */
+int jmp(MV *mv){
+    return saltarSi(mv, 1);
 }
-int jp(MV *mv) { 
-    return OK; 
+
+/* JP A  ->  salta si el resultado fue positivo (N = 0 y Z = 0). */
+int jp(MV *mv){
+    return saltarSi(mv, !(mv->reg[CC] & CC_N) && !(mv->reg[CC] & CC_Z));
 }
-int jn_(MV *mv){ 
-    return OK; 
+
+/* JN A  ->  salta si el resultado fue negativo (N = 1). */
+int jn_(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_N) != 0);
 }
-int jz(MV *mv)  { 
-    return OK; 
+
+/* JZ A  ->  salta si el resultado fue cero (Z = 1). */
+int jz(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_Z) != 0);
 }
-int jc(MV *mv) { 
+
+/* JC A  ->  salta si hubo acarreo (C = 1). */
+int jc(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_C) != 0);
+}
+
+/* JV A  ->  salta si hubo desbordamiento (V = 1). */
+int jv(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_V) != 0);
+}
+
+/* JNP A  ->  salta si NO fue positivo (N = 1 o Z = 1). */
+int jnp(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & (CC_N | CC_Z)) != 0);
+}
+
+/* JNN A  ->  salta si NO fue negativo (N = 0). */
+int jnn(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_N) == 0);
+}
+
+/* JNZ A  ->  salta si NO fue cero (Z = 0). */
+int jnz(MV *mv){
+    return saltarSi(mv, (mv->reg[CC] & CC_Z) == 0);
+}
+
+/* NOT A  ->  A = ~A (negación bit a bit).  Actualiza CC. */
+int not(MV *mv){
+    int32_t a, res;
+    int err = leerOperando(mv, mv->reg[OP1], &a);
+
+    if (err != OK)
+        return err;
+
+    res = (int32_t)(~(uint32_t)a);
+    err = escribirOperando(mv, mv->reg[OP1], res);
+    if (err != OK)
+        return err;
+
+    actualizarCCSimple(mv, res);
     return OK;
-}
-int jv(MV *mv) { 
-    return OK; 
-}
-int jnp(MV *mv){ 
-    return OK; 
-}
-int jnn(MV *mv) { 
-    return OK; 
-}
-int jnz(MV *mv) { 
-    return OK; 
-}
-int not(MV *mv){ 
-    return OK; 
 }
 
 /* ===== Sin operandos ===== */
@@ -176,7 +476,6 @@ int stop(MV *mv){
     mv->reg[IP] = 0xFFFFFFFF;
     return OK;
 }
-
 
 
  //OPERANDOS Y CODIGO DE CONDICION
