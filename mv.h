@@ -136,6 +136,10 @@ struct MV {
 };
 
 
+int  leerOperando(MV *mv, uint32_t op, int32_t *valor);
+int  escribirOperando(MV *mv, uint32_t op, int32_t valor);
+void actualizarCC(MV *mv, int64_t resultado);
+void actualizarCCSimple(MV *mv, int32_t resultado);
 /* mv.c : tabla de funciones y motor */
 void init_funciones(MV *mv);
 const char *nombreRegistro(uint8_t codigo);

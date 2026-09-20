@@ -177,6 +177,82 @@ int stop(MV *mv){
     return OK;
 }
 
+
+
+ //OPERANDOS Y CODIGO DE CONDICION
+
+/* Arma la dirección lógica de un operando de memoria:
+ * toma el segmento del registro base y le suma el desplazamiento. */
+static uint32_t dirLogicaOperando(MV *mv, uint32_t valor){
+    uint8_t  reg    = (uint8_t)(valor & 0xFF) & 0x1F;
+    int16_t  offset = (int16_t)(valor >> 8);
+    uint16_t seg    = (uint16_t)(mv->reg[reg] >> 16);
+    uint16_t off    = (uint16_t)(mv->reg[reg] & 0xFFFF);
+
+    return ((uint32_t)seg << 16) | (uint16_t)(off + offset);
+}
+
+/* Devuelve el valor de un operando (registro, inmediato o memoria). */
+int leerOperando(MV *mv, uint32_t op, int32_t *valor){
+    uint8_t  tipo  = (uint8_t)(op >> 24);
+    uint32_t crudo = op & 0x00FFFFFF;
+
+    if (tipo == TIPO_REGISTRO) {
+        *valor = (int32_t)mv->reg[crudo & 0x1F];
+        return OK;
+    }
+    if (tipo == TIPO_INMEDIATO) {
+        *valor = (int16_t)crudo;          /* extensión de signo */
+        return OK;
+    }
+    if (tipo == TIPO_MEMORIA)
+        return leerMemoria(mv, dirLogicaOperando(mv, crudo), 4, valor);
+
+    return ERR_INSTRUCCION;               /* operando inexistente */
+}
+
+/* Guarda un valor en un operando. Un inmediato no se puede escribir. */
+int escribirOperando(MV *mv, uint32_t op, int32_t valor){
+    uint8_t  tipo  = (uint8_t)(op >> 24);
+    uint32_t crudo = op & 0x00FFFFFF;
+
+    if (tipo == TIPO_REGISTRO) {
+        mv->reg[crudo & 0x1F] = (uint32_t)valor;
+        return OK;
+    }
+    if (tipo == TIPO_MEMORIA)
+        return escribirMemoria(mv, dirLogicaOperando(mv, crudo), 4, valor);
+
+    return ERR_INSTRUCCION;               /* inmediato o inexistente */
+}
+
+/* Actualiza N y Z, y pone C y V en 0.
+ * Se usa en las operaciones que no pueden desbordar: MOV, AND, OR, XOR, NOT, SWAP. */
+void actualizarCCSimple(MV *mv, int32_t resultado){
+    uint32_t cc = 0;
+
+    if (resultado < 0)  cc |= CC_N;
+    if (resultado == 0) cc |= CC_Z;
+
+    mv->reg[CC] = cc;
+}
+
+/* Actualiza los cuatro indicadores a partir del resultado "real" en 64 bits.
+ *   N, Z -> según el resultado ya truncado a 32 bits (el que se guarda)
+ *   C    -> el resultado real no entra en 32 bits
+ *   V    -> el resultado guardado es distinto del real (quedó mal) */
+void actualizarCC(MV *mv, int64_t resultado){
+    int32_t res32 = (int32_t)resultado;
+    uint32_t cc = 0;
+
+    if (res32 < 0)  cc |= CC_N;
+    if (res32 == 0) cc |= CC_Z;
+    if (((uint64_t)resultado >> 32) != 0) cc |= CC_C;
+    if (res32 != resultado)               cc |= CC_V;
+
+    mv->reg[CC] = cc;
+}
+
 //Ejecuta UNA instrucción, la que apunta IP:
 //   1. traduce IP (dirección lógica) a dirección física
 //  2. decodifica la instrucción y carga OPC, OP1 y OP2

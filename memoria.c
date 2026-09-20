@@ -2,8 +2,7 @@
 #include <string.h>
 #include "memoria.h"
  
-void inicializarMV(MV *mv, uint16_t tamCodigo)
-{
+void inicializarMV(MV *mv, uint16_t tamCodigo){
     // 1. Limpiar memoria física y registros a cero
     memset(mv->reg, 0, sizeof(mv->reg));
 
@@ -27,8 +26,7 @@ void inicializarMV(MV *mv, uint16_t tamCodigo)
     mv->reg[IP] = mv->reg[CS];                    /* IP arranca en CS */
 }
  
-vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo)
-{
+vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo){
     FILE *arch;
     uint8_t cabecera[TAM_CABECERA];
     uint16_t tam;
@@ -73,8 +71,7 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo)
     return OK;
 }
 
-int ipEnSegmentoDeCodigo(MV *mv)
-{
+int ipEnSegmentoDeCodigo(MV *mv){
     uint16_t seg = (uint16_t)(mv->reg[IP] >> 16);
     uint16_t off = (uint16_t)(mv->reg[IP] & 0xFFFF);
 
@@ -84,8 +81,7 @@ int ipEnSegmentoDeCodigo(MV *mv)
     return off < mv->tabla[SEG_CODIGO].tamanio;
 }
 
-void informarError(int codigo)
-{
+void informarError(int codigo){
     switch (codigo) {
         case ERR_ARCHIVO:
             printf("Error: no se pudo abrir el archivo.\n");
@@ -114,11 +110,70 @@ void informarError(int codigo)
     }
 }
 
-void mostrarUso(void)
-{
+void mostrarUso(void){
     printf("Uso: vmx filename.vmx [-d]\n");
     printf("  filename.vmx  programa en lenguaje maquina\n");
     printf("  -d            muestra el codigo desensamblado\n");
 }
 
+// ACCESO A MEMORIA
 
+/* -Traduce una dirección lógica (segmento + offset) a dirección física,
+ -verificando que el acceso de 'cantBytes' entre dentro del segmento.
+ - Devuelve ERR_SEGMENTO si el segmento no existe o el acceso se pasa. */
+
+int traducirDireccion(MV *mv, uint32_t dirLogica, int cantBytes, uint16_t *dirFisica){
+    uint16_t seg = (uint16_t)(dirLogica >> 16);
+    uint16_t off = (uint16_t)(dirLogica & 0xFFFF);
+
+    if (seg >= SEG_TABLE || mv->tabla[seg].base == SEG_INVALIDO)
+        return ERR_SEGMENTO;
+
+    if (off + cantBytes > mv->tabla[seg].tamanio)
+        return ERR_SEGMENTO;
+
+    *dirFisica = mv->tabla[seg].base + off;
+    return OK;
+}
+
+/* Lee 'cantBytes' de memoria desde una dirección lógica (big-endian).
+ * Carga LAR, MAR y MBR como pide el enunciado. ?? consultar*/
+int leerMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t *valor){
+    uint16_t dirFisica;
+    uint32_t v = 0;                    /* sin signo: los corrimientos son seguros */
+    int err = traducirDireccion(mv, dirLogica, cantBytes, &dirFisica);
+
+    if (err != OK)
+        return err;
+
+    mv->reg[LAR] = dirLogica;
+    mv->reg[MAR] = ((uint32_t)cantBytes << 16) | dirFisica;
+
+    for (int i = 0; i < cantBytes; i++)
+        v = (v << 8) | mv->mem[dirFisica + i];
+
+    mv->reg[MBR] = v;
+    *valor = (int32_t)v;
+    return OK;
+}
+
+/* Escribe 'cantBytes' en memoria desde una dirección lógica .
+ * Carga LAR, MAR y MBR como pide el enunciado. ??? consultar */
+int escribirMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t valor){
+    uint16_t dirFisica;
+    uint32_t v;
+    int err = traducirDireccion(mv, dirLogica, cantBytes, &dirFisica);
+
+    if (err != OK)
+        return err;
+
+    mv->reg[LAR] = dirLogica;
+    mv->reg[MAR] = ((uint32_t)cantBytes << 16) | dirFisica;
+    mv->reg[MBR] = (uint32_t)valor;
+
+    v = (uint32_t)valor;
+    for (int i = 0; i < cantBytes; i++)
+        mv->mem[dirFisica + i] = (uint8_t)(v >> (8 * (cantBytes - 1 - i)));
+
+    return OK;
+}

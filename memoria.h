@@ -19,3 +19,10 @@ void informarError(int codigo);
 /* Muestra las instrucciones de uso del ejecutable por línea de comandos. */
 void mostrarUso(void);
 
+/* Traduce una dirección lógica a física validando los límites del segmento. */
+int traducirDireccion(MV *mv, uint32_t dirLogica, int cantBytes, uint16_t *dirFisica);
+
+/* Lee/escribe 'cantBytes' de memoria desde una dirección lógica,
+ * cargando LAR, MAR y MBR. */
+int leerMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t *valor);
+int escribirMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t valor);
