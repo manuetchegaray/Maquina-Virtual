@@ -138,6 +138,8 @@ struct MV {
 
 /* mv.c : tabla de funciones y motor */
 void init_funciones(MV *mv);
+const char *nombreRegistro(uint8_t codigo);
+int  decodificarInstruccion(MV *mv, uint16_t dir, uint8_t *opc, uint32_t *opA, uint32_t *opB);
 int  ejecutarInstruccion(MV *mv);
 int ejecutarPrograma(MV *mv);
 void disassembler(MV *mv);
