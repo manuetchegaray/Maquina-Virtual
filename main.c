@@ -1,24 +1,12 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
 #include "memoria.h"
 
 
 MV mv;
 uint16_t tamCodigo = 0;
-
-static void imprimirEstado(const MV *mv) {
-    printf("=== Tabla de Segmentos ===\n");
-    for (unsigned i = 0; i < SEG_TABLE; i++) {
-        printf("  [%u] Base: 0x%04X | Tamanio: 0x%04X\n",
-               i, mv->tabla[i].base, mv->tabla[i].tamanio);
-    }
-
-    printf("\n=== Registros Iniciales ===\n");
-    printf("  CS = 0x%08X\n", mv->reg[CS]);
-    printf("  DS = 0x%08X\n", mv->reg[DS]);
-    printf("  IP = 0x%08X\n", mv->reg[IP]);
-    printf("---------------------------\n");
-}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -43,6 +31,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    srand((unsigned int)time(NULL));   /* semilla para RND, una sola vez */
+
 
     // 1. Cargar ejecutable desde disco
     vm_error_t res = cargarPrograma(&mv, rutaArchivo, &tamCodigo);
@@ -55,17 +45,10 @@ int main(int argc, char *argv[]) {
     inicializarMV(&mv, tamCodigo);
     init_funciones(&mv);
 
-    printf("Programa '%s' cargado exitosamente (%u bytes de codigo).\n\n", 
-           rutaArchivo, tamCodigo);
-
-    imprimirEstado(&mv);
-
     // 3. Flujo principal: Disassembler o Ejecución
     if (modoDisassembler) {
-        printf("Modo Desensamblador activo:\n");
         disassembler(&mv);
     } else {
-        printf("Iniciando ejecucion...\n");
         // Proximamente: Ciclo Fetch-Decode-Execute
         res = ejecutarPrograma(&mv);
         if (res != OK) {

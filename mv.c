@@ -406,9 +406,79 @@ static int saltarSi(MV *mv, int condicion){
     return OK;
 }
 
-int sys(MV *mv) { 
+/*Formatear un valor de 'tam' bytes segun el modo del registro EAX(setea modo de lectura o escritura del llamado sys)*/
+
+static void imprimirValorSegunModo (int32_t valor, uint32_t modo, int tam){
+    uint32_t sinSigno = (uint32_t) valor & (tam < 4 ? ((1u << (tam * 8)) - 1) : 0xFFFFFFFFu);
+
+     switch (modo) {
+        case MODO_DECIMAL:  printf("%d", valor); break;
+        case MODO_CARACTER: printf("%c", (char)valor); break;
+        case MODO_OCTAL:    printf("%o", sinSigno); break;
+        case MODO_HEXA:     printf("%X", sinSigno); break;
+        case MODO_BINARIO:
+            for (int b = tam * 8 - 1; b >= 0; b--)
+                printf("%d", (sinSigno >> b) & 1);
+            break;
+        default: printf("%d", valor); break;
+    }
+ 
+}
+
+static int32_t leerValorSegunModo(uint32_t modo) {
+    int32_t valor = 0;
+    switch (modo) {
+        case MODO_CARACTER: { char c; scanf(" %c", &c); valor = (int32_t)c; break; }
+        case MODO_OCTAL:    scanf("%o", (unsigned int *)&valor); break;
+        case MODO_HEXA:     scanf("%x", (unsigned int *)&valor); break;
+        case MODO_BINARIO:  scanf("%d", &valor); break;  /* no hay %b en scanf */
+        default:            scanf("%d", &valor); break;  /* decimal */
+    }
+    return valor;
+}
+
+/* SYS A  ->  llamadas al sistema READ (1) y WRITE (2).
+ * A indica el numero de llamada. EAX = modo, EDX = direccion logica inicial,
+ * ECX = cantidad de celdas (16 bits bajos) + tamanio de cada una (16 bits altos). */
+
+int sys(MV *mv) {
+    
+    int32_t llamada;
+    int err = leerOperando(mv, mv->reg[OP1], &llamada);
+    if (err != OK) return err;
+
+    uint32_t modo       = mv->reg[EAX];
+    uint32_t dirLogica  = mv->reg[EDX];
+    uint16_t cantCeldas = (uint16_t)(mv->reg[ECX] & 0xFFFF);
+    uint16_t tamCelda   = (uint16_t)(mv->reg[ECX] >> 16);
+
+    for (uint16_t i = 0; i < cantCeldas; i++) {
+        uint16_t dirFisica;
+        err = traducirDireccion(mv, dirLogica, tamCelda, &dirFisica);
+        if (err != OK) return err;
+
+        printf("[%04X]: ", dirFisica);
+
+        if (llamada == SYS_READ) {
+            int32_t valor = leerValorSegunModo(modo);
+            err = escribirMemoria(mv, dirLogica, tamCelda, valor);
+        } else if (llamada == SYS_WRITE) {
+            int32_t valor;
+            err = leerMemoria(mv, dirLogica, tamCelda, &valor);
+            if (err == OK) { imprimirValorSegunModo(valor, modo, tamCelda); printf("\n"); }
+        } else {
+            return ERR_INSTRUCCION;
+        }
+        if (err != OK) return err;
+
+        dirLogica = (dirLogica & 0xFFFF0000) | (uint16_t)((dirLogica & 0xFFFF) + tamCelda);
+    }
     return OK; 
 }
+
+
+
+
 /* JMP A  ->  salto incondicional. */
 int jmp(MV *mv){
     return saltarSi(mv, 1);
