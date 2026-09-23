@@ -365,9 +365,7 @@ int ldh(MV *mv){
     if (err != OK)
         return err;
 
-    return escribirOperando(mv, mv->reg[OP1],
-                            (int32_t)(((uint32_t)a & 0x0000FFFF) |
-                                      ((uint32_t)b << 16)));
+    return escribirOperando(mv, mv->reg[OP1],(int32_t)(((uint32_t)a & 0x0000FFFF) | ((uint32_t)b << 16)));
 }
 
 /* RND A, B  ->  A = número aleatorio entre 0 y B.  No afecta CC. */
@@ -408,32 +406,63 @@ static int saltarSi(MV *mv, int condicion){
 
 /*Formatear un valor de 'tam' bytes segun el modo del registro EAX(setea modo de lectura o escritura del llamado sys)*/
 
-static void imprimirValorSegunModo (int32_t valor, uint32_t modo, int tam){
-    uint32_t sinSigno = (uint32_t) valor & (tam < 4 ? ((1u << (tam * 8)) - 1) : 0xFFFFFFFFu);
+static void imprimirValorSegunModo(int32_t valor, uint32_t modo, int tam){
+    uint32_t sinSigno = (uint32_t)valor &(tam < 4 ? ((1u << (tam * 8)) - 1) : 0xFFFFFFFFu);
+    int b;
 
-     switch (modo) {
-        case MODO_DECIMAL:  printf("%d", valor); break;
-        case MODO_CARACTER: printf("%c", (char)valor); break;
-        case MODO_OCTAL:    printf("%o", sinSigno); break;
-        case MODO_HEXA:     printf("%X", sinSigno); break;
-        case MODO_BINARIO:
-            for (int b = tam * 8 - 1; b >= 0; b--)
-                printf("%d", (sinSigno >> b) & 1);
-            break;
-        default: printf("%d", valor); break;
+    if (modo & MODO_DECIMAL)
+        printf("%d ", valor);
+
+    if (modo & MODO_CARACTER)
+        printf("%c ", (char)valor);
+
+    if (modo & MODO_OCTAL)
+        printf("0o%o ", sinSigno);
+
+    if (modo & MODO_HEXA)
+        printf("0x%X ", sinSigno);
+
+    if (modo & MODO_BINARIO) {
+        printf("0b");
+        for (b = tam * 8 - 1; b >= 0; b--)
+            printf("%u", (sinSigno >> b) & 1u);
+        printf(" ");
     }
- 
+
+    /* si no se indico ningun modo valido, se muestra en decimal */
+    if ((modo & (MODO_DECIMAL | MODO_CARACTER | MODO_OCTAL |MODO_HEXA | MODO_BINARIO)) == 0)
+        printf("%d ", valor);
 }
 
-static int32_t leerValorSegunModo(uint32_t modo) {
+static int32_t leerValorSegunModo(uint32_t modo){
     int32_t valor = 0;
-    switch (modo) {
-        case MODO_CARACTER: { char c; scanf(" %c", &c); valor = (int32_t)c; break; }
-        case MODO_OCTAL:    scanf("%o", (unsigned int *)&valor); break;
-        case MODO_HEXA:     scanf("%x", (unsigned int *)&valor); break;
-        case MODO_BINARIO:  scanf("%d", &valor); break;  /* no hay %b en scanf */
-        default:            scanf("%d", &valor); break;  /* decimal */
+
+    if (modo & MODO_CARACTER) {
+        char c;
+        scanf(" %c", &c);
+        valor = (int32_t)(unsigned char)c;
+    } 
+    else if (modo & MODO_OCTAL) {
+        scanf("%o", (unsigned int *)&valor);
+    } 
+    else if (modo & MODO_HEXA) {
+        scanf("%x", (unsigned int *)&valor);
+    } 
+    else if (modo & MODO_BINARIO) {
+        char binario[40];
+        uint32_t v = 0;
+        int k;
+
+        scanf("%39s", binario);
+        for (k = 0; binario[k] == '0' || binario[k] == '1'; k++)
+            v = (v << 1) | (uint32_t)(binario[k] - '0');
+
+        valor = (int32_t)v;
+    } 
+    else {
+        scanf("%d", &valor);          /* decimal */
     }
+
     return valor;
 }
 
@@ -462,11 +491,16 @@ int sys(MV *mv) {
         if (llamada == SYS_READ) {
             int32_t valor = leerValorSegunModo(modo);
             err = escribirMemoria(mv, dirLogica, tamCelda, valor);
-        } else if (llamada == SYS_WRITE) {
+        } 
+        else if (llamada == SYS_WRITE) {
             int32_t valor;
             err = leerMemoria(mv, dirLogica, tamCelda, &valor);
-            if (err == OK) { imprimirValorSegunModo(valor, modo, tamCelda); printf("\n"); }
-        } else {
+            if (err == OK) { 
+                imprimirValorSegunModo(valor, modo, tamCelda); 
+                printf("\n"); 
+            }
+        } 
+        else {
             return ERR_INSTRUCCION;
         }
         if (err != OK) return err;

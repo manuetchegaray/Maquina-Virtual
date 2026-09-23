@@ -48,13 +48,12 @@ int main(int argc, char *argv[]) {
     // 3. Flujo principal: Disassembler o Ejecución
     if (modoDisassembler) {
         disassembler(&mv);
-    } else {
-        // Proximamente: Ciclo Fetch-Decode-Execute
-        res = ejecutarPrograma(&mv);
+    } 
+    res = ejecutarPrograma(&mv);
         if (res != OK) {
             informarError(res);
         }
-    }
+    
 
-    return 0;
+    return res;
 }
