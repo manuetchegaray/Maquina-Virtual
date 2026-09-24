@@ -256,24 +256,31 @@ int xor(MV *mv){
     return OK;
 }
 
-/* SWAP A, B  ->  intercambia los valores de A y B.  Actualiza CC. */
+/* SWAP A, B  ->  intercambia los valores de A y B.
+ * tres XOR seguidos: xor A, B   |   xor B, A   |   xor A, B
+ * por eso el CC queda como lo dejo el ultimo XOR. */
 int swap(MV *mv){
-    int32_t a, b;
-    int err = leerAB(mv, &a, &b);
+    uint32_t opA = mv->reg[OP1];
+    uint32_t opB = mv->reg[OP2];
+    int err;
 
-    if (err != OK)
-        return err;
+    err = xor(mv);                       /* xor A, B */
 
-    err = escribirOperando(mv, mv->reg[OP1], b);
-    if (err != OK)
-        return err;
+    if (err == OK) {
+        mv->reg[OP1] = opB;              /* xor B, A */
+        mv->reg[OP2] = opA;
+        err = xor(mv);
+    }
 
-    err = escribirOperando(mv, mv->reg[OP2], a);
-    if (err != OK)
-        return err;
+    if (err == OK) {
+        mv->reg[OP1] = opA;              /* xor A, B */
+        mv->reg[OP2] = opB;
+        err = xor(mv);
+    }
 
-    actualizarCCSimple(mv, b);
-    return OK;
+    mv->reg[OP1] = opA;                  /* dejo OP1 y OP2 como estaban */
+    mv->reg[OP2] = opB;
+    return err;
 }
 
 /* SHL A, B  ->  A = A << B (entran ceros por la derecha).  Actualiza CC. */
@@ -644,14 +651,22 @@ void actualizarCCSimple(MV *mv, int32_t resultado){
  *   N, Z -> según el resultado ya truncado a 32 bits (el que se guarda)
  *   C    -> el resultado real no entra en 32 bits
  *   V    -> el resultado guardado es distinto del real (quedó mal) */
-void actualizarCC(MV *mv, int64_t resultado){
-    int32_t res32 = (int32_t)resultado;
+void actualizarCC(MV *mv, int64_t resultado)
+{
+    int32_t  comoConSigno  = (int32_t)resultado;    /* como entero con signo    */
+    uint32_t comoSinSigno  = (uint32_t)resultado;   /* como entero sin signo    */
     uint32_t cc = 0;
 
-    if (res32 < 0)  cc |= CC_N;
-    if (res32 == 0) cc |= CC_Z;
-    if (((uint64_t)resultado >> 32) != 0) cc |= CC_C;
-    if (res32 != resultado)               cc |= CC_V;
+    if (comoConSigno < 0)  cc |= CC_N;
+    if (comoConSigno == 0) cc |= CC_Z;
+
+    /* C: el resultado no entra en 32 bits mirandolo SIN signo */
+    if (resultado != (int64_t)comoSinSigno)
+        cc |= CC_C;
+
+    /* V: el resultado no entra en 32 bits mirandolo CON signo */
+    if (resultado != (int64_t)comoConSigno)
+        cc |= CC_V;
 
     mv->reg[CC] = cc;
 }
