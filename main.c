@@ -34,18 +34,26 @@ int main(int argc, char *argv[]) {
     srand((unsigned int)time(NULL));   /* semilla para RND, una sola vez */
 
 
-    // 1. Cargar ejecutable desde disco
-    vm_error_t res = cargarPrograma(&mv, rutaArchivo, &tamCodigo);
+    // 1. Crear la memoria principal (por ahora, siempre el tamaño por defecto)
+    vm_error_t res = crearMemoria(&mv, MEM_SIZE_KIB);
     if (res != OK) {
         informarError(res);
         return res;
     }
 
-    // 2. Inicializar MV con el tamaño de código detectado
+    // 2. Cargar ejecutable desde disco
+    res = cargarPrograma(&mv, rutaArchivo, &tamCodigo);
+    if (res != OK) {
+        informarError(res);
+        liberarMemoria(&mv);
+        return res;
+    }
+
+    // 3. Inicializar MV con el tamaño de código detectado
     inicializarMV(&mv, tamCodigo);
     init_funciones(&mv);
 
-    // 3. Flujo principal: Disassembler o Ejecución
+    // 4. Flujo principal: Disassembler o Ejecución
     if (modoDisassembler) {
         disassembler(&mv);
     } 
@@ -54,6 +62,6 @@ int main(int argc, char *argv[]) {
             informarError(res);
         }
     
-
+    liberarMemoria(&mv);
     return res;
 }

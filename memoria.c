@@ -1,6 +1,7 @@
 #include <stdio.h>
-#include <string.h>
+#include <string.h>     
 #include "memoria.h"
+#include <stdlib.h>
  
 void inicializarMV(MV *mv, uint16_t tamCodigo){
     // 1. Limpiar memoria física y registros a cero
@@ -12,7 +13,7 @@ void inicializarMV(MV *mv, uint16_t tamCodigo){
 
     // 3. Configurar Segmento de Datos (empieza justo después del código)
     mv->tabla[SEG_DATOS].base     = tamCodigo;
-    mv->tabla[SEG_DATOS].tamanio  = (uint16_t)(MEMORY_SIZE - tamCodigo);
+    mv->tabla[SEG_DATOS].tamanio  = (uint16_t)(mv->tamMem - tamCodigo);
 
     // 4. Invalidar el resto de la tabla de segmentos
     for (int i = 2; i < SEG_TABLE; i++) {
@@ -52,12 +53,12 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo){
 
     tam = (uint16_t)((cabecera[6] << 8) | cabecera[7]);
 
-    if (tam > MEMORY_SIZE) {
+    if (tam > mv->tamMem) {
         fclose(arch);
         return ERR_TAMANIO;
     }
 
-    memset(mv->mem, 0, MEMORY_SIZE);
+    memset(mv->mem, 0, mv->tamMem);
 
 
     /* el segmento de codigo arranca al comienzo de la memoria */
@@ -103,6 +104,15 @@ void informarError(int codigo){
             break;
         case ERR_SEGMENTO:
             printf("Error: fallo de segmento.\n");
+            break;
+        case ERR_MEMORIA:
+            printf("Error: memoria insuficiente.\n");
+            break;
+        case ERR_STACK_OVF:
+            printf("Error: stack overflow.\n");
+            break;
+        case ERR_STACK_UNF:
+            printf("Error: stack underflow.\n");
             break;
         default:
             printf("Error desconocido.\n");
@@ -176,4 +186,20 @@ int escribirMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t valor){
         mv->mem[dirFisica + i] = (uint8_t)(v >> (8 * (cantBytes - 1 - i)));
 
     return OK;
+}
+
+/* Crea la memoria principal de 'kib' KiB, inicializada en cero. */
+vm_error_t crearMemoria(MV *mv, uint32_t kib){
+    mv->tamMem = kib * 1024;
+    mv->mem = (uint8_t *)calloc(mv->tamMem, 1);
+    if (mv->mem == NULL)
+        return ERR_MEMORIA;
+    return OK;
+}
+
+/* Libera la memoria principal. */
+void liberarMemoria(MV *mv){
+    free(mv->mem);
+    mv->mem = NULL;
+    mv->tamMem = 0;
 }

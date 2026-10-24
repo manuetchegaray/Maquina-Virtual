@@ -3,7 +3,7 @@
 
 #define MV_H
 
-#define MEMORY_SIZE 16384           // 16 KiB
+#define MEM_SIZE_KIB 16 
 #define CANTREG 32
 #define SEG_TABLE 8
 #define CANT_INSTR  32   
@@ -21,6 +21,8 @@
 #define LAR 4
 #define MAR 5
 #define MBR 6
+#define SP  7 //stack pointer
+#define BP  8 //base pointer
 //7-8-9 Reservados
 #define EAX 10
 #define EBX 11
@@ -33,7 +35,10 @@
 //18 - 25 RESERVADOS
 #define CS 26 //code segment
 #define DS 27 //data segment
-//28 -31 reservados
+#define ES 28 //extra segment
+#define SS 29 //stack segment
+#define KS 30 //const segment
+#define PS 31 //param segment
 
 #define CC_N (1u << 31)   /* signo          */
 #define CC_Z (1u << 30)   /* cero           */
@@ -114,6 +119,9 @@ typedef int vm_error_t;
 #define ERR_INSTRUCCION   5
 #define ERR_DIV_CERO      6
 #define ERR_SEGMENTO      7
+#define ERR_MEMORIA       8   /* memoria insuficiente */
+#define ERR_STACK_OVF     9   /* stack overflow  (PUSH / CALL) */
+#define ERR_STACK_UNF     10  /* stack underflow (POP / RET)   */
 
 typedef struct {
     uint16_t base; /*Direccion fisica del comienzo del segmento*/
@@ -129,7 +137,8 @@ typedef struct {
 } tfunc;
 
 struct MV {
-    uint8_t  mem[MEMORY_SIZE];
+    uint8_t  *mem;   /* memoria principal, se crea con malloc */
+    uint32_t tamMem;  /* tamaño de la memoria en bytes */
     uint32_t reg[CANTREG];
     Segmento tabla[SEG_TABLE];
     tfunc    FUNCIONES[CANT_INSTR];

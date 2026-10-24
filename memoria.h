@@ -2,6 +2,7 @@
 
 #include "mv.h"
 
+
 /* Inicializa los registros, asigna los segmentos de Código y Datos en la tabla,
  * invalida el resto de la tabla y deja los punteros CS, DS e IP listos. */
 void inicializarMV(MV *mv, uint16_t tamCodigo);
@@ -26,3 +27,9 @@ int traducirDireccion(MV *mv, uint32_t dirLogica, int cantBytes, uint16_t *dirFi
  * cargando LAR, MAR y MBR. */
 int leerMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t *valor);
 int escribirMemoria(MV *mv, uint32_t dirLogica, int cantBytes, int32_t valor);
+
+/* Crea la memoria principal de 'kib' KiB (en cero) y guarda su tamaño en tamMem. */
+vm_error_t crearMemoria(MV *mv, uint32_t kib);
+
+/* Libera la memoria principal. */
+void liberarMemoria(MV *mv);

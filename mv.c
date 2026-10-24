@@ -74,10 +74,12 @@ void init_funciones(MV *mv){
 static const char *NOMBRE_REG[CANTREG] = {
     [IP]  = "IP",  [OPC] = "OPC", [OP1] = "OP1", [OP2] = "OP2",
     [LAR] = "LAR", [MAR] = "MAR", [MBR] = "MBR",
+    [SP]="sp", [BP]="BP",
     [EAX] = "EAX", [EBX] = "EBX", [ECX] = "ECX",
     [EDX] = "EDX", [EEX] = "EEX", [EFX] = "EFX",
     [AC]  = "AC",  [CC]  = "CC",
-    [CS]  = "CS",  [DS]  = "DS"
+    [CS]  = "CS",  [DS]  = "DS", [ES]="ES",
+    [SS]="SS",[KS]="KS",[PS]="PS"
 };
 
 const char *nombreRegistro(uint8_t codigo){
