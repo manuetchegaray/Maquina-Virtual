@@ -3,72 +3,129 @@
 #include "memoria.h"
 #include <stdlib.h>
  
-void inicializarMV(MV *mv, uint16_t tamCodigo){
-    // 1. Limpiar memoria física y registros a cero
-    memset(mv->reg, 0, sizeof(mv->reg));
 
-    // 2. Configurar Segmento de Código (empieza en 0)
-    mv->tabla[SEG_CODIGO].base    = 0;
-    mv->tabla[SEG_CODIGO].tamanio = tamCodigo;
+/* Arma un entero de 2 bytes a partir de 2 bytes en big endian. */
+static uint16_t leer16(const uint8_t *b){
+    return (uint16_t)((b[0] << 8) | b[1]);
+}
 
-    // 3. Configurar Segmento de Datos (empieza justo después del código)
-    mv->tabla[SEG_DATOS].base     = tamCodigo;
-    mv->tabla[SEG_DATOS].tamanio  = (uint16_t)(mv->tamMem - tamCodigo);
+/* Lee y valida la cabecera del .vmx (version 1 o 2). */
+vm_error_t leerCabecera(FILE *arch, Cabecera *cab){
+    uint8_t buf[TAM_CABECERA_V2];
 
-    // 4. Invalidar el resto de la tabla de segmentos
-    for (int i = 2; i < SEG_TABLE; i++) {
-        mv->tabla[i].base    = 0xFFFF;
-        mv->tabla[i].tamanio = 0xFFFF;
+    if (fread(buf, 1, 6, arch) != 6 || memcmp(buf, "VMX26", 5) != 0)
+        return ERR_CABECERA;
+
+    memset(cab, 0, sizeof(*cab));
+    cab->version = buf[5];
+
+    if (cab->version == 1) {
+        if (fread(buf + 6, 1, TAM_CABECERA_V1 - 6, arch) != TAM_CABECERA_V1 - 6)
+            return ERR_CABECERA;
+        cab->tamCode = leer16(buf + 6);
     }
+    else if (cab->version == 2) {
+        if (fread(buf + 6, 1, TAM_CABECERA_V2 - 6, arch) != TAM_CABECERA_V2 - 6)
+            return ERR_CABECERA;
+        cab->tamCode    = leer16(buf + 6);
+        cab->tamData    = leer16(buf + 8);
+        cab->tamExtra   = leer16(buf + 10);
+        cab->tamStack   = leer16(buf + 12);
+        cab->tamConst   = leer16(buf + 14);
+        cab->entryPoint = leer16(buf + 16);
+    }
+    else
+        return ERR_VERSION;
 
-    // 5. Cargar registros de segmento y puntero de instrucción
-    mv->reg[CS] = ((uint32_t)SEG_CODIGO << 16);   /* 0x00000000 */
-    mv->reg[DS] = ((uint32_t)SEG_DATOS  << 16);   /* 0x00010000 */
-    mv->reg[IP] = mv->reg[CS];                    /* IP arranca en CS */
+    return OK;
+}
+
+/* Si el segmento tiene tamaño > 0, lo agrega en la siguiente entrada libre de la tabla,
+ * a partir de la direccion fisica 'base', y deja su registro apuntando al comienzo.
+ * Si su tamaño es 0, no crea entrada y el registro queda en -1. */
+static void agregarSegmento(MV *mv, int *entrada, uint32_t *base, uint16_t tam, int regSeg){
+    if (tam == 0) {
+        mv->reg[regSeg] = SEG_NULO;
+        return;
+    }
+    mv->tabla[*entrada].base    = (uint16_t)*base;
+    mv->tabla[*entrada].tamanio = tam;
+    mv->reg[regSeg] = (uint32_t)*entrada << 16;   /* entrada en los 16 bits altos, offset 0 */
+
+    *base += tam;
+    (*entrada)++;
+}
+
+/* Arma la tabla de segmentos en el orden Param, Const, Code, Data, Extra, Stack
+ * (solo los de tamaño > 0) y carga los registros de segmento. */
+vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam){
+    uint32_t total = (uint32_t)tamParam + cab->tamConst + cab->tamCode
+                   + cab->tamData + cab->tamExtra + cab->tamStack;
+    int entrada = 0;
+    uint32_t base = 0;
+
+    if (total > mv->tamMem)
+        return ERR_MEMORIA;
+
+    memset(mv->reg, 0, sizeof(mv->reg));
+    memset(mv->tabla, 0, sizeof(mv->tabla));      /* entradas sin usar: base 0, tamaño 0 */
+
+    agregarSegmento(mv, &entrada, &base, tamParam,      PS);
+    agregarSegmento(mv, &entrada, &base, cab->tamConst, KS);
+    agregarSegmento(mv, &entrada, &base, cab->tamCode,  CS);
+    agregarSegmento(mv, &entrada, &base, cab->tamData,  DS);
+    agregarSegmento(mv, &entrada, &base, cab->tamExtra, ES);
+    agregarSegmento(mv, &entrada, &base, cab->tamStack, SS);
+    return OK;
+}
+
+/* Devuelve la direccion fisica donde empieza el segmento apuntado por un registro de segmento. */
+static uint16_t baseSegmento(MV *mv, int regSeg){
+    return mv->tabla[mv->reg[regSeg] >> 16].base;
 }
  
-vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo){
+vm_error_t cargarPrograma(MV *mv, const char *ruta){
     FILE *arch;
-    uint8_t cabecera[TAM_CABECERA];
-    uint16_t tam;
+    Cabecera cab;
+    vm_error_t err;
 
     arch = fopen(ruta, "rb");
     if (arch == NULL)
         return ERR_ARCHIVO;
 
-    if (fread(cabecera, 1, TAM_CABECERA, arch) != TAM_CABECERA) {
+    err = leerCabecera(arch, &cab);
+    if (err != OK  ) {
         fclose(arch);
-        return ERR_CABECERA;
+        return err;
+    }
+    /* version 1: como en la Parte I, el Data Segment ocupa el resto de la memoria */
+    if (cab.version == 1) {
+        uint32_t resto = (cab.tamCode < mv->tamMem) ? mv->tamMem - cab.tamCode : 0;
+        cab.tamData = (resto > 0xFFFF) ? 0xFFFF : (uint16_t)resto;
     }
 
-    if (memcmp(cabecera, "VMX26", 5) != 0) {
+    err = armarSegmentos(mv, &cab, 0);   /* Param Segment: todavia sin -p */
+    if (err != OK) {
         fclose(arch);
-        return ERR_CABECERA;
+        return err;
     }
 
-    if (cabecera[5] != VERSION_MV) {
-        fclose(arch);
-        return ERR_VERSION;
-    }
-
-    tam = (uint16_t)((cabecera[6] << 8) | cabecera[7]);
-
-    if (tam > mv->tamMem) {
-        fclose(arch);
-        return ERR_TAMANIO;
-    }
-
-    memset(mv->mem, 0, mv->tamMem);
-
-
-    /* el segmento de codigo arranca al comienzo de la memoria */
-    if (fread(mv->mem, 1, tam, arch) != tam) {
+    /* despues de la cabecera viene el codigo y a continuacion las constantes */
+    if (fread(mv->mem + baseSegmento(mv, CS), 1, cab.tamCode, arch) != cab.tamCode
+        || (cab.tamConst > 0
+            && fread(mv->mem + baseSegmento(mv, KS), 1, cab.tamConst, arch) != cab.tamConst)) {
         fclose(arch);
         return ERR_TAMANIO;
     }
-
     fclose(arch);
-    *tamCodigo = tam;
+
+    /* IP: entrada del Code Segment en los 16 bits altos, entry point en los bajos */
+    mv->reg[IP] = mv->reg[CS] | cab.entryPoint;
+
+    /* SP: pila vacia, apunta justo despues del final del Stack Segment */
+    if (mv->reg[SS] != SEG_NULO)
+        mv->reg[SP] = mv->reg[SS] + cab.tamStack;
+
     return OK;
 }
 
@@ -76,10 +133,10 @@ int ipEnSegmentoDeCodigo(MV *mv){
     uint16_t seg = (uint16_t)(mv->reg[IP] >> 16);
     uint16_t off = (uint16_t)(mv->reg[IP] & 0xFFFF);
 
-    if (seg != SEG_CODIGO)
+    if (seg != (uint16_t)(mv->reg[CS] >> 16))
         return 0;
 
-    return off < mv->tabla[SEG_CODIGO].tamanio;
+    return off < mv->tabla[seg].tamanio;
 }
 
 void informarError(int codigo){
@@ -136,7 +193,7 @@ int traducirDireccion(MV *mv, uint32_t dirLogica, int cantBytes, uint16_t *dirFi
     uint16_t seg = (uint16_t)(dirLogica >> 16);
     uint16_t off = (uint16_t)(dirLogica & 0xFFFF);
 
-    if (seg >= SEG_TABLE || mv->tabla[seg].base == SEG_INVALIDO)
+    if (seg >= SEG_TABLE || mv->tabla[seg].tamanio == 0)
         return ERR_SEGMENTO;
 
     if (off + cantBytes > mv->tabla[seg].tamanio)

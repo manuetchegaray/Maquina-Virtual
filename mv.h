@@ -8,9 +8,8 @@
 #define SEG_TABLE 8
 #define CANT_INSTR  32   
 
-/* cabecera del archivo .vmx */
-#define TAM_CABECERA 8
-#define VERSION_MV   1
+#define TAM_CABECERA_V1 8
+#define TAM_CABECERA_V2 18
 
 
 //  REGISTROS
@@ -23,7 +22,7 @@
 #define MBR 6
 #define SP  7 //stack pointer
 #define BP  8 //base pointer
-//7-8-9 Reservados
+//9 reservado
 #define EAX 10
 #define EBX 11
 #define ECX 12
@@ -45,9 +44,8 @@
 #define CC_C (1u << 29)   /* acarreo        */
 #define CC_V (1u << 28)   /* desbordamiento */
 
-#define SEG_CODIGO  0
-#define SEG_DATOS   1
-#define SEG_INVALIDO 0xFFFF   /* base y tamaño de las entradas sin usar */
+#define SEG_NULO  0xFFFFFFFF   
+
 
 /*Instrucciones*/
 
@@ -127,6 +125,17 @@ typedef struct {
     uint16_t base; /*Direccion fisica del comienzo del segmento*/
     uint16_t tamanio; /*Cantidad de byte que ocupa*/
 } Segmento;
+
+/* Datos de la cabecera del .vmx (en la version 1 solo viene tamCode) */
+typedef struct {
+    uint8_t  version;
+    uint16_t tamCode;
+    uint16_t tamData;
+    uint16_t tamExtra;
+    uint16_t tamStack;
+    uint16_t tamConst;
+    uint16_t entryPoint;
+} Cabecera;
 
 typedef struct MV MV;
 typedef int (*tOperacion)(MV *mv);

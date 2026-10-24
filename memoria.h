@@ -1,15 +1,15 @@
 #pragma once
 
 #include "mv.h"
+#include <stdio.h>
 
+/* Arma la tabla de segmentos (Param, Const, Code, Data, Extra, Stack; solo los de
+ * tamaño > 0) y carga los registros de segmento. Si no entran, ERR_MEMORIA. */
+vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam);
 
-/* Inicializa los registros, asigna los segmentos de Código y Datos en la tabla,
- * invalida el resto de la tabla y deja los punteros CS, DS e IP listos. */
-void inicializarMV(MV *mv, uint16_t tamCodigo);
-
-/* Lee un archivo .vmx, valida la cabecera ("VMX26", versión actual), 
- * carga el código binario en memoria y devuelve el tamaño del código cargado. */
-vm_error_t cargarPrograma(MV *mv, const char *ruta, uint16_t *tamCodigo);
+/* Lee un .vmx (version 1 o 2), arma los segmentos, carga el codigo y las
+ * constantes y deja listos IP y SP. */
+vm_error_t cargarPrograma(MV *mv, const char *ruta);
 
 /* Verifica si el registro IP apunta dentro de los límites del Segmento de Código. */
 int ipEnSegmentoDeCodigo(MV *mv);
@@ -33,3 +33,6 @@ vm_error_t crearMemoria(MV *mv, uint32_t kib);
 
 /* Libera la memoria principal. */
 void liberarMemoria(MV *mv);
+
+/* Lee y valida la cabecera del .vmx (version 1 o 2). */
+vm_error_t leerCabecera(FILE *arch, Cabecera *cab);

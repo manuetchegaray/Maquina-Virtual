@@ -74,7 +74,7 @@ void init_funciones(MV *mv){
 static const char *NOMBRE_REG[CANTREG] = {
     [IP]  = "IP",  [OPC] = "OPC", [OP1] = "OP1", [OP2] = "OP2",
     [LAR] = "LAR", [MAR] = "MAR", [MBR] = "MBR",
-    [SP]="sp", [BP]="BP",
+    [SP]="SP", [BP]="BP",
     [EAX] = "EAX", [EBX] = "EBX", [ECX] = "ECX",
     [EDX] = "EDX", [EEX] = "EEX", [EFX] = "EFX",
     [AC]  = "AC",  [CC]  = "CC",
@@ -796,8 +796,9 @@ static void imprimirOperando(uint32_t op)
 // Recorre el segmento de código y muestra cada instrucción con el formato
 //[0000] B1 00 0A 00 05 9B | ADD [DS+5], 10 
 void disassembler(MV *mv){
-    uint16_t dir = mv->tabla[SEG_CODIGO].base;
-    uint16_t fin = dir + mv->tabla[SEG_CODIGO].tamanio;
+    uint16_t segCod = (uint16_t)(mv->reg[CS] >> 16);
+    uint16_t dir = mv->tabla[segCod].base;
+    uint16_t fin = dir + mv->tabla[segCod].tamanio;
 
     while (dir < fin) {
         uint8_t  opc;

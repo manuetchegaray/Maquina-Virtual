@@ -6,7 +6,6 @@
 
 
 MV mv;
-uint16_t tamCodigo = 0;
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -42,15 +41,14 @@ int main(int argc, char *argv[]) {
     }
 
     // 2. Cargar ejecutable desde disco
-    res = cargarPrograma(&mv, rutaArchivo, &tamCodigo);
+    res = cargarPrograma(&mv, rutaArchivo);
     if (res != OK) {
         informarError(res);
         liberarMemoria(&mv);
         return res;
     }
 
-    // 3. Inicializar MV con el tamaño de código detectado
-    inicializarMV(&mv, tamCodigo);
+    // 3. Cargar la tabla de instrucciones
     init_funciones(&mv);
 
     // 4. Flujo principal: Disassembler o Ejecución
@@ -58,9 +56,9 @@ int main(int argc, char *argv[]) {
         disassembler(&mv);
     } 
     res = ejecutarPrograma(&mv);
-        if (res != OK) {
-            informarError(res);
-        }
+    if (res != OK) {
+        informarError(res);
+    }
     
     liberarMemoria(&mv);
     return res;
