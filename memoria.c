@@ -178,9 +178,13 @@ void informarError(int codigo){
 }
 
 void mostrarUso(void){
-    printf("Uso: vmx filename.vmx [-d]\n");
+    printf("Uso: vmx [filename.vmx] [filename.vmi] [m=M] [-d] [-p param1 ... paramN]\n");
     printf("  filename.vmx  programa en lenguaje maquina\n");
+    printf("  filename.vmi  archivo de imagen de la maquina virtual\n");
+    printf("  m=M           tamanio de la memoria principal en KiB (por defecto %d)\n", MEM_SIZE_KIB);
     printf("  -d            muestra el codigo desensamblado\n");
+    printf("  -p            parametros para la subrutina principal (siempre al final)\n");
+    printf("Es obligatorio indicar al menos un .vmx o un .vmi\n");
 }
 
 // ACCESO A MEMORIA
