@@ -511,23 +511,11 @@ int breakpoint(MV *mv){
     }
 }
 
-/* SYS A  ->  llamadas al sistema READ (1) y WRITE (2).
- * A indica el numero de llamada. EAX = modo, EDX = direccion logica inicial,
+/* SYS 1 / SYS 2  ->  READ y WRITE de la Parte I.
+ * EAX = modo, EDX = direccion logica inicial,
  * ECX = cantidad de celdas (16 bits bajos) + tamanio de cada una (16 bits altos). */
-
-int sys(MV *mv) {
-    
-    int32_t llamada;
-    int err = leerOperando(mv, mv->reg[OP1], &llamada);
-    if (err != OK) return err;
-
-    if (llamada == SYS_BREAKPOINT) {
-        /* sin .vmi se ignora; en modo paso a paso el breakpoint ya lo hace ejecutarPrograma */
-        if (mv->rutaVmi == NULL || mv->pasoAPaso)
-            return OK;
-        return breakpoint(mv);
-    }
-
+static int sysLeerEscribir(MV *mv, int32_t llamada) {
+    int err;
     uint32_t modo       = mv->reg[EAX];
     uint32_t dirLogica  = mv->reg[EDX];
     uint16_t cantCeldas = (uint16_t)(mv->reg[ECX] & 0xFFFF);
@@ -544,7 +532,7 @@ int sys(MV *mv) {
             int32_t valor = leerValorSegunModo(modo);
             err = escribirMemoria(mv, dirLogica, tamCelda, valor);
         } 
-        else if (llamada == SYS_WRITE) {
+        else {
             int32_t valor;
             err = leerMemoria(mv, dirLogica, tamCelda, &valor);
             if (err == OK) { 
@@ -552,9 +540,6 @@ int sys(MV *mv) {
                 printf("\n"); 
             }
         } 
-        else {
-            return ERR_INSTRUCCION;
-        }
         if (err != OK) return err;
 
         dirLogica = (dirLogica & 0xFFFF0000) | (uint16_t)((dirLogica & 0xFFFF) + tamCelda);
@@ -567,6 +552,105 @@ int sys(MV *mv) {
             ;
     }
     return OK; 
+}
+
+/* Devuelve en 'res' la direccion logica 'dir' + 'n' (sumando solo en el offset).
+ * Si el offset se pasa de 16 bits, el acceso queda fuera de cualquier segmento. */
+static int dirMas(uint32_t dir, uint32_t n, uint32_t *res){
+    uint32_t off = (dir & 0xFFFF) + n;
+
+    if (off > 0xFFFF)
+        return ERR_SEGMENTO;
+
+    *res = (dir & 0xFFFF0000) | off;
+    return OK;
+}
+
+/* SYS 3 (STRING READ)  ->  lee una linea del teclado y la guarda como string
+ * a partir de la direccion apuntada por EDX, terminada en '\0'.
+ * ECX = cantidad maxima de caracteres (-1: sin limite). Lo que sobra de la linea se descarta. */
+static int sysStringRead(MV *mv){
+    int32_t  max = (int32_t)mv->reg[ECX];
+    uint32_t cant = 0, dir;
+    int c, err;
+
+    while ((c = getchar()) != '\n' && c != EOF) {
+        if (max == -1 || (int32_t)cant < max) {
+            err = dirMas(mv->reg[EDX], cant, &dir);
+            if (err == OK)
+                err = escribirMemoria(mv, dir, 1, c);
+            if (err != OK)
+                return err;
+            cant++;
+        }
+    }
+
+    /* el '\0' final */
+    err = dirMas(mv->reg[EDX], cant, &dir);
+    if (err != OK)
+        return err;
+    return escribirMemoria(mv, dir, 1, 0);
+}
+
+/* SYS 4 (STRING WRITE)  ->  imprime el string que empieza en la direccion
+ * apuntada por EDX, hasta encontrar un '\0'. */
+static int sysStringWrite(MV *mv){
+    uint32_t i = 0, dir;
+    int32_t c;
+    int err;
+
+    while (1) {
+        err = dirMas(mv->reg[EDX], i, &dir);
+        if (err == OK)
+            err = leerMemoria(mv, dir, 1, &c);
+        if (err != OK)
+            return err;
+        if (c == 0)
+            break;
+        putchar((char)c);
+        i++;
+    }
+    fflush(stdout);
+    return OK;
+}
+
+/* SYS 0 (CLEAR SCREEN)  ->  limpia la pantalla. No usa ni modifica registros. */
+static int sysClearScreen(void){
+    fflush(stdout);
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+    return OK;
+}
+
+/* SYS A  ->  llamada al sistema numero A. */
+int sys(MV *mv) {
+    int32_t llamada;
+    int err = leerOperando(mv, mv->reg[OP1], &llamada);
+
+    if (err != OK)
+        return err;
+
+    switch (llamada) {
+        case SYS_CLEAR:
+            return sysClearScreen();
+        case SYS_READ:
+        case SYS_WRITE:
+            return sysLeerEscribir(mv, llamada);
+        case SYS_STR_READ:
+            return sysStringRead(mv);
+        case SYS_STR_WRITE:
+            return sysStringWrite(mv);
+        case SYS_BREAKPOINT:
+            /* sin .vmi se ignora; en modo paso a paso el breakpoint ya lo hace ejecutarPrograma */
+            if (mv->rutaVmi == NULL || mv->pasoAPaso)
+                return OK;
+            return breakpoint(mv);
+        default:
+            return ERR_INSTRUCCION;       /* llamada al sistema inexistente */
+    }
 }
 
 

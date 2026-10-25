@@ -100,8 +100,11 @@
 #define TIPO_A1(b)      (((b) >> 6) & 0x03)   /* tipo de A, un operando */
 
 /*Llamadas al sistema*/
+#define SYS_CLEAR  0
 #define SYS_READ   1
 #define SYS_WRITE  2
+#define SYS_STR_READ   3
+#define SYS_STR_WRITE  0x04
 #define SYS_BREAKPOINT 0x0F
  
 /* modos de lectura / escritura, en EAX */
