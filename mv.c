@@ -64,7 +64,15 @@ void init_funciones(MV *mv){
     mv->FUNCIONES[JNN].func = jnn;
     strcpy(mv->FUNCIONES[NOT].nombre, "NOT");
     mv->FUNCIONES[NOT].func = not;
+    strcpy(mv->FUNCIONES[PUSH].nombre, "PUSH");
+    mv->FUNCIONES[PUSH].func = push;
+    strcpy(mv->FUNCIONES[POP].nombre, "POP");
+    mv->FUNCIONES[POP].func = pop;
+    strcpy(mv->FUNCIONES[CALL].nombre, "CALL");
+    mv->FUNCIONES[CALL].func = call;
 
+    strcpy(mv->FUNCIONES[RET].nombre, "RET");
+    mv->FUNCIONES[RET].func = ret;
     strcpy(mv->FUNCIONES[STOP].nombre, "STOP");
     mv->FUNCIONES[STOP].func = stop;
 }
@@ -626,7 +634,97 @@ int not(MV *mv){
     return OK;
 }
 
+/* ===== Pila ===== */
+
+/* Lee los 4 bytes del tope de la pila (big endian), sin mover SP.
+ * Si la pila esta vacia o no quedan 4 bytes: STACK UNDERFLOW. */
+static int leerTope(MV *mv, int32_t *valor){
+    uint32_t finPila;
+
+    if (mv->reg[SS] == SEG_NULO)
+        return ERR_STACK_UNF;
+
+    /* direccion logica justo despues del ultimo byte del Stack Segment */
+    finPila = mv->reg[SS] + mv->tabla[mv->reg[SS] >> 16].tamanio;
+    if (mv->reg[SP] + 4 > finPila)
+        return ERR_STACK_UNF;
+
+    return leerMemoria(mv, mv->reg[SP], 4, valor);
+}
+
+/* PUSH A  ->  1. SP -= 4   2. si SP < SS: STACK OVERFLOW
+ *             3-4. obtiene el valor de A en 4 bytes   5. lo guarda en el tope (big endian) */
+int push(MV *mv){
+    int32_t valor;
+    int err;
+
+    mv->reg[SP] -= 4;
+    if (mv->reg[SP] < mv->reg[SS])
+        return ERR_STACK_OVF;
+
+    err = leerOperando(mv, mv->reg[OP1], &valor);
+    if (err != OK)
+        return err;
+
+    return escribirMemoria(mv, mv->reg[SP], 4, valor);
+}
+
+/* POP A  ->  1-2. extrae 4 bytes del tope (si no hay: STACK UNDERFLOW)
+ *            3-4. los asigna a A (si A es mas chico se truncan)   5. SP += 4 */
+int pop(MV *mv){
+    int32_t valor;
+    int err = leerTope(mv, &valor);
+
+    if (err != OK)
+        return err;
+
+    err = escribirOperando(mv, mv->reg[OP1], valor);
+    if (err != OK)
+        return err;
+
+    mv->reg[SP] += 4;
+    return OK;
+}
+
+/* CALL A  ->  equivale a PUSH IP + JMP A:
+ *  guarda en la pila el IP (que ya apunta a la siguiente instruccion)
+ *  y reemplaza los 2 bytes bajos del IP por el valor de A. */
+int call(MV *mv){
+    int32_t destino;
+    int err;
+
+    mv->reg[SP] -= 4;
+    if (mv->reg[SP] < mv->reg[SS])
+        return ERR_STACK_OVF;
+
+    err = escribirMemoria(mv, mv->reg[SP], 4, (int32_t)mv->reg[IP]);
+    if (err != OK)
+        return err;
+
+    err = leerOperando(mv, mv->reg[OP1], &destino);
+    if (err != OK)
+        return err;
+
+    mv->reg[IP] = (mv->reg[IP] & 0xFFFF0000) | ((uint32_t)destino & 0xFFFF);
+    return OK;
+}
+
 /* ===== Sin operandos ===== */
+
+/* RET  ->  equivale a POP IP: toma el IP del tope de la pila y SP += 4.
+ * Si el valor es -1 (retorno del main), el IP queda fuera del Code Segment y termina. */
+int ret(MV *mv){
+    int32_t valor;
+    int err = leerTope(mv, &valor);
+
+    if (err != OK)
+        return err;
+
+    mv->reg[IP] = (uint32_t)valor;
+    mv->reg[SP] += 4;
+    return OK;
+}
+
 int stop(MV *mv){
     mv->reg[IP] = 0xFFFFFFFF;
     return OK;
@@ -843,7 +941,7 @@ int decodificarInstruccion(MV *mv, uint16_t dir, uint8_t *opc, uint32_t *opA, ui
     if (*opc & 0x10) {                 // 0x10..0x1F: dos operandos 
         tipoB = TIPO_B(primer);
         tipoA = TIPO_A2(primer);
-    } else if (*opc == STOP) {         // sin operandos 
+    } else if (*opc == STOP || *opc == RET) {         // sin operandos 
         tipoB = TIPO_NINGUNO;
         tipoA = TIPO_NINGUNO;
     } else {                           //0x00..0x0E: un operando 

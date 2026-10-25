@@ -180,11 +180,67 @@ vm_error_t cargarImagen(MV *mv, const char *ruta){
     fclose(arch);
     return err;
 }
+
+/* Devuelve el i-esimo string del Param Segment:
+ * el 0 es el nombre del .vmx y los siguientes son los parametros de -p. */
+static const char *parametro(const char *ruta, char **params, int i){
+    return (i == 0) ? ruta : params[i - 1];
+}
+
+/* Tamaño del Param Segment: todos los strings (cada uno con su '\0')
+ * mas el arreglo argv de 'argc' punteros de 4 bytes. */
+static uint32_t tamanioParam(const char *ruta, char **params, int argc){
+    uint32_t tam = 0;
+
+    for (int i = 0; i < argc; i++)
+        tam += (uint32_t)strlen(parametro(ruta, params, i)) + 1;
+
+    return tam + 4 * (uint32_t)argc;
+}
+
+/* Escribe en el Param Segment los strings y, a continuacion, el arreglo argv.
+ * Cada puntero tiene la entrada del Param Segment (0x0000) en los 16 bits altos
+ * y el offset del string en los 16 bits bajos.
+ * Devuelve el puntero (direccion logica) al comienzo del arreglo argv. */
+static uint32_t cargarParam(MV *mv, const char *ruta, char **params, int argc){
+    uint8_t *seg = mv->mem + baseSegmento(mv, PS);
+    uint32_t off = 0;
+    uint32_t offArgv;
+
+    /* 1. los strings, uno detras de otro */
+    for (int i = 0; i < argc; i++) {
+        const char *s = parametro(ruta, params, i);
+        size_t len = strlen(s) + 1;            /* incluye el '\0' */
+
+        memcpy(seg + off, s, len);
+        off += (uint32_t)len;
+    }
+
+    /* 2. el arreglo argv: un puntero a cada string */
+    offArgv = off;
+    off = 0;
+    for (int i = 0; i < argc; i++) {
+        escribir32(seg + offArgv + 4 * i, mv->reg[PS] | off);
+        off += (uint32_t)strlen(parametro(ruta, params, i)) + 1;
+    }
+
+    return mv->reg[PS] | offArgv;
+}
+
+/* Agrega 4 bytes a la pila (igual que PUSH). Se usa para armar la pila inicial. */
+static vm_error_t apilar(MV *mv, uint32_t valor){
+    mv->reg[SP] -= 4;
+    if (mv->reg[SP] < mv->reg[SS])
+        return ERR_STACK_OVF;
+    return escribirMemoria(mv, mv->reg[SP], 4, (int32_t)valor);
+}
  
-vm_error_t cargarPrograma(MV *mv, const char *ruta){
+vm_error_t cargarPrograma(MV *mv, const char *ruta, int cantParams, char **params){
     FILE *arch;
     Cabecera cab;
     vm_error_t err;
+    int argc;
+    uint32_t tamParam, argv;
 
     arch = fopen(ruta, "rb");
     if (arch == NULL)
@@ -204,9 +260,17 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta){
     if (cab.version == 1) {
         uint32_t resto = (cab.tamCode < mv->tamMem) ? mv->tamMem - cab.tamCode : 0;
         cab.tamData = (resto > 0xFFFF) ? 0xFFFF : (uint16_t)resto;
+        cantParams = 0;
+    }
+    /* Param Segment: solo si hay parametros. argc cuenta tambien el nombre del .vmx */
+    argc = (cantParams > 0) ? cantParams + 1 : 0;
+    tamParam = tamanioParam(ruta, params, argc);
+    if (tamParam > 0xFFFF) {
+        fclose(arch);
+        return ERR_MEMORIA;
     }
 
-    err = armarSegmentos(mv, &cab, 0);   /* Param Segment: todavia sin -p */
+    err = armarSegmentos(mv, &cab, (uint16_t)tamParam);
     if (err != OK) {
         fclose(arch);
         return err;
@@ -224,11 +288,24 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta){
     /* IP: entrada del Code Segment en los 16 bits altos, entry point en los bajos */
     mv->reg[IP] = mv->reg[CS] | cab.entryPoint;
 
-    /* SP: pila vacia, apunta justo despues del final del Stack Segment */
-    if (mv->reg[SS] != SEG_NULO)
-        mv->reg[SP] = mv->reg[SS] + cab.tamStack;
+    /* sin pila (version 1) no hay subrutina principal que preparar */
+    if (mv->reg[SS] == SEG_NULO)
+        return OK;
 
-    return OK;
+    /* SP: pila vacia, apunta justo despues del final del Stack Segment */
+    mv->reg[SP] = mv->reg[SS] + cab.tamStack;
+
+    /* parametros: strings + argv en el Param Segment (si no hay, argv = -1) */
+    argv = (argc > 0) ? cargarParam(mv, ruta, params, argc) : SEG_NULO;
+
+    /* pila de la subrutina principal: [SP] = retorno (-1), [SP+4] = argc, [SP+8] = argv */
+    err = apilar(mv, argv);
+    if (err == OK)
+        err = apilar(mv, (uint32_t)argc);
+    if (err == OK)
+        err = apilar(mv, 0xFFFFFFFF);
+
+    return err;
 }
 
 int ipEnSegmentoDeCodigo(MV *mv){

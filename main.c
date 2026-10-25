@@ -78,8 +78,7 @@ int main(int argc, char *argv[]) {
         }
 
         // 2. Cargar ejecutable desde disco
-        res = cargarPrograma(&mv, args.rutaVmx);
-        if (res != OK) {
+        res = cargarPrograma(&mv, args.rutaVmx, args.cantParams, args.params);        if (res != OK) {
             informarError(res);
             liberarMemoria(&mv);
             return res;
