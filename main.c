@@ -86,9 +86,14 @@ int main(int argc, char *argv[]) {
         }
     }
     else {
-        /* solo .vmi: continuar una imagen (se implementa en la parte 3c) */
-        printf("Todavia no se puede continuar una imagen.\n");
-        return 1;
+        // 1-2. Solo .vmi: retomar la ejecucion desde la imagen
+        //      (el tamaño de la memoria sale del .vmi, se ignora m=M)
+        res = cargarImagen(&mv, args.rutaVmi);
+        if (res != OK) {
+            informarError(res);
+            liberarMemoria(&mv);
+            return res;
+        }
     }
 
     // 3. Cargar la tabla de instrucciones

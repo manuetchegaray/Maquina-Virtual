@@ -131,6 +131,55 @@ vm_error_t guardarImagen(MV *mv, const char *ruta){
     fclose(arch);
     return OK;
 }
+/* Arma un entero de 4 bytes a partir de 4 bytes en big endian. */
+static uint32_t leer32(const uint8_t *b){
+    return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16)
+         | ((uint32_t)b[2] << 8)  |  (uint32_t)b[3];
+}
+
+/* Carga una imagen .vmi para continuar su ejecucion: crea la memoria con el
+ * tamaño que indica el header y restaura registros, tabla de segmentos y memoria. */
+vm_error_t cargarImagen(MV *mv, const char *ruta){
+    FILE *arch = fopen(ruta, "rb");
+    uint8_t buf[8];
+    vm_error_t err = OK;
+
+    if (arch == NULL)
+        return ERR_ARCHIVO;
+
+    /* header: "VMI26", version 1, tamaño de la memoria en KiB */
+    if (fread(buf, 1, 8, arch) != 8 || memcmp(buf, "VMI26", 5) != 0)
+        err = ERR_CABECERA;
+    else if (buf[5] != 1)
+        err = ERR_VERSION;
+    else
+        err = crearMemoria(mv, leer16(buf + 6));
+
+    /* registros */
+    for (int i = 0; err == OK && i < CANTREG; i++) {
+        if (fread(buf, 1, 4, arch) != 4)
+            err = ERR_CABECERA;
+        else
+            mv->reg[i] = leer32(buf);
+    }
+
+    /* tabla de segmentos */
+    for (int i = 0; err == OK && i < SEG_TABLE; i++) {
+        if (fread(buf, 1, 4, arch) != 4)
+            err = ERR_CABECERA;
+        else {
+            mv->tabla[i].base    = leer16(buf);
+            mv->tabla[i].tamanio = leer16(buf + 2);
+        }
+    }
+
+    /* memoria principal */
+    if (err == OK && fread(mv->mem, 1, mv->tamMem, arch) != mv->tamMem)
+        err = ERR_CABECERA;
+
+    fclose(arch);
+    return err;
+}
  
 vm_error_t cargarPrograma(MV *mv, const char *ruta){
     FILE *arch;
@@ -145,6 +194,11 @@ vm_error_t cargarPrograma(MV *mv, const char *ruta){
     if (err != OK  ) {
         fclose(arch);
         return err;
+    }
+     /* el Code Segment siempre tiene que existir */
+    if (cab.tamCode == 0) {
+        fclose(arch);
+        return ERR_CABECERA;
     }
     /* version 1: como en la Parte I, el Data Segment ocupa el resto de la memoria */
     if (cab.version == 1) {
