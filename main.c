@@ -78,11 +78,13 @@ int main(int argc, char *argv[]) {
         }
 
         // 2. Cargar ejecutable desde disco
-        res = cargarPrograma(&mv, args.rutaVmx, args.cantParams, args.params);        if (res != OK) {
+        res = cargarPrograma(&mv, args.rutaVmx, args.cantParams, args.params);
+        if (res != OK) {
             informarError(res);
             liberarMemoria(&mv);
             return res;
-        }
+        }   
+        
     }
     else {
         // 1-2. Solo .vmi: retomar la ejecucion desde la imagen
@@ -94,7 +96,7 @@ int main(int argc, char *argv[]) {
             return res;
         }
     }
-
+    
     // 3. Cargar la tabla de instrucciones
     init_funciones(&mv);
     mv.rutaVmi   = args.rutaVmi;     /* NULL si no se indico: se ignoran los breakpoints */
