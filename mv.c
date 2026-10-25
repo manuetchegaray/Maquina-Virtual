@@ -646,36 +646,87 @@ static uint32_t dirLogicaOperando(MV *mv, uint32_t valor){
     return ((uint32_t)seg << 16) | (uint16_t)(off + offset);
 }
 
-/* Devuelve el valor de un operando (registro, inmediato o memoria). */
+/* Sector de un operando de registro: bits 6-5 del byte del registro.
+ *   00 -> EAX (4 bytes)   01 -> AL (4to byte)   10 -> AH (3er byte)   11 -> AX (2 bytes) */
+#define SECTOR(b)        (((b) >> 5) & 0x03)
+#define SECTOR_E         0
+#define SECTOR_L         1
+#define SECTOR_H         2
+#define SECTOR_X         3
+
+/* Cantidad de bytes de un operando de memoria segun los 3 bits mas altos del
+ * byte del registro: 001 -> b (1 byte), 010 -> w (2 bytes), 100 -> l (4 bytes).
+ * Si no tiene modificador (000, archivos de la version 1) se usan 4 bytes. */
+static int tamOperandoMemoria(uint32_t crudo){
+    switch ((crudo >> 5) & 0x07) {
+        case 1:  return 1;
+        case 2:  return 2;
+        default: return 4;
+    }
+}
+
+/* Extiende el signo de un valor de 'tam' bytes a 4 bytes. */
+static int32_t extenderSigno(uint32_t valor, int tam){
+    if (tam == 1) return (int8_t)valor;
+    if (tam == 2) return (int16_t)valor;
+    return (int32_t)valor;
+}
+
+/* Devuelve el valor de un operando (registro, inmediato o memoria),
+ * siempre transformado a 4 bytes (con extension de signo). */
 int leerOperando(MV *mv, uint32_t op, int32_t *valor){
     uint8_t  tipo  = (uint8_t)(op >> 24);
     uint32_t crudo = op & 0x00FFFFFF;
 
     if (tipo == TIPO_REGISTRO) {
-        *valor = (int32_t)mv->reg[crudo & 0x1F];
+        uint32_t r = mv->reg[crudo & 0x1F];
+
+        switch (SECTOR(crudo)) {
+            case SECTOR_L: *valor = extenderSigno(r & 0xFF, 1);        break;
+            case SECTOR_H: *valor = extenderSigno((r >> 8) & 0xFF, 1); break;
+            case SECTOR_X: *valor = extenderSigno(r & 0xFFFF, 2);      break;
+            default:       *valor = (int32_t)r;                        break;
+        }
         return OK;
     }
     if (tipo == TIPO_INMEDIATO) {
         *valor = (int16_t)crudo;          /* extensión de signo */
         return OK;
     }
-    if (tipo == TIPO_MEMORIA)
-        return leerMemoria(mv, dirLogicaOperando(mv, crudo), 4, valor);
+    if (tipo == TIPO_MEMORIA) {
+        int tam = tamOperandoMemoria(crudo);
+        int err = leerMemoria(mv, dirLogicaOperando(mv, crudo), tam, valor);
+
+        if (err == OK)
+            *valor = extenderSigno((uint32_t)*valor, tam);
+        return err;
+    }
 
     return ERR_INSTRUCCION;               /* operando inexistente */
 }
 
-/* Guarda un valor en un operando. Un inmediato no se puede escribir. */
+/* Guarda un valor en un operando. Si el operando es de menos de 4 bytes,
+ * se truncan los bytes mas significativos. Un inmediato no se puede escribir. */
 int escribirOperando(MV *mv, uint32_t op, int32_t valor){
     uint8_t  tipo  = (uint8_t)(op >> 24);
     uint32_t crudo = op & 0x00FFFFFF;
 
     if (tipo == TIPO_REGISTRO) {
-        mv->reg[crudo & 0x1F] = (uint32_t)valor;
+        uint32_t *r = &mv->reg[crudo & 0x1F];
+        uint32_t  v = (uint32_t)valor;
+
+        /* solo se modifica el sector indicado, el resto del registro queda igual */
+        switch (SECTOR(crudo)) {
+            case SECTOR_L: *r = (*r & 0xFFFFFF00) | (v & 0xFF);         break;
+            case SECTOR_H: *r = (*r & 0xFFFF00FF) | ((v & 0xFF) << 8);  break;
+            case SECTOR_X: *r = (*r & 0xFFFF0000) | (v & 0xFFFF);       break;
+            default:       *r = v;                                      break;
+        }
         return OK;
     }
     if (tipo == TIPO_MEMORIA)
-        return escribirMemoria(mv, dirLogicaOperando(mv, crudo), 4, valor);
+        return escribirMemoria(mv, dirLogicaOperando(mv, crudo),
+                               tamOperandoMemoria(crudo), valor);
 
     return ERR_INSTRUCCION;               /* inmediato o inexistente */
 }
