@@ -44,7 +44,7 @@
 #define CC_C (1u << 29)   /* acarreo        */
 #define CC_V (1u << 28)   /* desbordamiento */
 
-#define SEG_NULO  0xFFFFFFFF   
+#define SEG_NULO  0xFFFFFFFF /* valor de un registro de segmento cuyo segmento no existe */ 
 
 
 /*Instrucciones*/
@@ -97,6 +97,7 @@
 /*Llamadas al sistema*/
 #define SYS_READ   1
 #define SYS_WRITE  2
+#define SYS_BREAKPOINT 0x0F
  
 /* modos de lectura / escritura, en EAX */
 #define MODO_DECIMAL  0x01
@@ -151,6 +152,8 @@ struct MV {
     uint32_t reg[CANTREG];
     Segmento tabla[SEG_TABLE];
     tfunc    FUNCIONES[CANT_INSTR];
+    const char *rutaVmi;   /* archivo de imagen (NULL si no se indico: se ignoran los breakpoints) */
+    int pasoAPaso;         /* 1 si el usuario pidio ejecutar de a una instruccion (Enter) */
 };
 
 
@@ -164,6 +167,7 @@ const char *nombreRegistro(uint8_t codigo);
 int  decodificarInstruccion(MV *mv, uint16_t dir, uint8_t *opc, uint32_t *opA, uint32_t *opB);
 int  ejecutarInstruccion(MV *mv);
 int ejecutarPrograma(MV *mv);
+int breakpoint(MV *mv);
 void disassembler(MV *mv);
 
 /* dos operandos */

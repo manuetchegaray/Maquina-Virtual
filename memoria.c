@@ -83,6 +83,54 @@ vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam){
 static uint16_t baseSegmento(MV *mv, int regSeg){
     return mv->tabla[mv->reg[regSeg] >> 16].base;
 }
+
+/* Escribe un entero de 2 o 4 bytes en big endian. */
+static void escribir16(uint8_t *b, uint16_t v){
+    b[0] = (uint8_t)(v >> 8);
+    b[1] = (uint8_t)v;
+}
+
+static void escribir32(uint8_t *b, uint32_t v){
+    b[0] = (uint8_t)(v >> 24);
+    b[1] = (uint8_t)(v >> 16);
+    b[2] = (uint8_t)(v >> 8);
+    b[3] = (uint8_t)v;
+}
+
+/* Guarda el estado de la MV en un archivo .vmi:
+ * header (8 bytes) + 32 registros (4 bytes c/u) + tabla de segmentos (8 x 4 bytes) + memoria. */
+vm_error_t guardarImagen(MV *mv, const char *ruta){
+    FILE *arch = fopen(ruta, "wb");
+    uint8_t buf[8];
+
+    if (arch == NULL)
+        return ERR_ARCHIVO;
+
+    /* header: "VMI26", version 1, tamaño de la memoria en KiB */
+    memcpy(buf, "VMI26", 5);
+    buf[5] = 1;
+    escribir16(buf + 6, (uint16_t)(mv->tamMem / 1024));
+    fwrite(buf, 1, 8, arch);
+
+    /* registros */
+    for (int i = 0; i < CANTREG; i++) {
+        escribir32(buf, mv->reg[i]);
+        fwrite(buf, 1, 4, arch);
+    }
+
+    /* tabla de segmentos: base y tamaño, 2 bytes cada uno */
+    for (int i = 0; i < SEG_TABLE; i++) {
+        escribir16(buf, mv->tabla[i].base);
+        escribir16(buf + 2, mv->tabla[i].tamanio);
+        fwrite(buf, 1, 4, arch);
+    }
+
+    /* memoria principal completa */
+    fwrite(mv->mem, 1, mv->tamMem, arch);
+
+    fclose(arch);
+    return OK;
+}
  
 vm_error_t cargarPrograma(MV *mv, const char *ruta){
     FILE *arch;

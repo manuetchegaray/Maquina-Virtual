@@ -93,6 +93,8 @@ int main(int argc, char *argv[]) {
 
     // 3. Cargar la tabla de instrucciones
     init_funciones(&mv);
+    mv.rutaVmi   = args.rutaVmi;     /* NULL si no se indico: se ignoran los breakpoints */
+    mv.pasoAPaso = 0;
 
     // 4. Flujo principal: Disassembler o Ejecución
     if (args.disassembler) {

@@ -7,6 +7,9 @@
  * tamaño > 0) y carga los registros de segmento. Si no entran, ERR_MEMORIA. */
 vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam);
 
+/* Guarda el estado de la MV (registros, tabla de segmentos y memoria) en un .vmi. */
+vm_error_t guardarImagen(MV *mv, const char *ruta);
+
 /* Lee un .vmx (version 1 o 2), arma los segmentos, carga el codigo y las
  * constantes y deja listos IP y SP. */
 vm_error_t cargarPrograma(MV *mv, const char *ruta);

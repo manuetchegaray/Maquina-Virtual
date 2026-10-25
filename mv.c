@@ -475,6 +475,34 @@ static int32_t leerValorSegunModo(uint32_t modo){
     return valor;
 }
 
+/* Genera la imagen en el .vmi y espera la accion del usuario:
+ *   g     -> sigue ejecutando hasta el proximo breakpoint
+ *   q     -> aborta la ejecucion (el .vmi queda como esta, para poder retomarlo)
+ *   Enter -> ejecuta la siguiente instruccion y vuelve a hacer un breakpoint */
+int breakpoint(MV *mv){
+    char linea[32];
+    int err = guardarImagen(mv, mv->rutaVmi);
+
+    if (err != OK)
+        return err;
+
+    while (1) {
+        if (fgets(linea, sizeof(linea), stdin) == NULL || linea[0] == 'q') {
+            mv->reg[IP] = 0xFFFFFFFF;      /* igual que STOP: IP fuera del Code Segment */
+            return OK;
+        }
+        if (linea[0] == 'g') {
+            mv->pasoAPaso = 0;
+            return OK;
+        }
+        if (linea[0] == '\n') {
+            mv->pasoAPaso = 1;
+            return OK;
+        }
+        /* cualquier otra cosa: se sigue esperando */
+    }
+}
+
 /* SYS A  ->  llamadas al sistema READ (1) y WRITE (2).
  * A indica el numero de llamada. EAX = modo, EDX = direccion logica inicial,
  * ECX = cantidad de celdas (16 bits bajos) + tamanio de cada una (16 bits altos). */
@@ -484,6 +512,13 @@ int sys(MV *mv) {
     int32_t llamada;
     int err = leerOperando(mv, mv->reg[OP1], &llamada);
     if (err != OK) return err;
+
+    if (llamada == SYS_BREAKPOINT) {
+        /* sin .vmi se ignora; en modo paso a paso el breakpoint ya lo hace ejecutarPrograma */
+        if (mv->rutaVmi == NULL || mv->pasoAPaso)
+            return OK;
+        return breakpoint(mv);
+    }
 
     uint32_t modo       = mv->reg[EAX];
     uint32_t dirLogica  = mv->reg[EDX];
@@ -515,6 +550,13 @@ int sys(MV *mv) {
         if (err != OK) return err;
 
         dirLogica = (dirLogica & 0xFFFF0000) | (uint16_t)((dirLogica & 0xFFFF) + tamCelda);
+    }
+
+    /* descarta lo que quedo en la linea (el Enter), para que no lo tome un breakpoint */
+    if (llamada == SYS_READ) {
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF)
+            ;
     }
     return OK; 
 }
@@ -706,9 +748,17 @@ int ejecutarInstruccion(MV *mv){
 int ejecutarPrograma(MV *mv){
     int err = OK;
 
-    while (err == OK && ipEnSegmentoDeCodigo(mv))
+    while (err == OK && ipEnSegmentoDeCodigo(mv)){
+         /* se mira el modo ANTES de ejecutar: si esta instruccion es el SYS F que
+         * activa el paso a paso, el siguiente breakpoint va despues de la proxima */
+        int pasoAPaso = mv->pasoAPaso;
+
         err = ejecutarInstruccion(mv);
 
+        /* modo paso a paso: despues de cada instruccion, un nuevo breakpoint */
+        if (err == OK && pasoAPaso && ipEnSegmentoDeCodigo(mv))
+            err = breakpoint(mv);
+    }
     return err;
 }
 
