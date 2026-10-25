@@ -10,12 +10,13 @@ vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam);
 /* Guarda el estado de la MV (registros, tabla de segmentos y memoria) en un .vmi. */
 vm_error_t guardarImagen(MV *mv, const char *ruta);
 
+/* Carga un .vmi (crea la memoria del tamaño indicado y restaura registros,
+ * tabla de segmentos y memoria) para continuar la ejecucion. */
+vm_error_t cargarImagen(MV *mv, const char *ruta);
+
 /* Lee un .vmx (version 1 o 2), arma los segmentos, carga el codigo, las constantes
  * y los parametros (-p), deja listos IP y SP, y arma la pila de la subrutina principal. */
 vm_error_t cargarPrograma(MV *mv, const char *ruta, int cantParams, char **params);
-/* Lee un .vmx (version 1 o 2), arma los segmentos, carga el codigo y las
- * constantes y deja listos IP y SP. */
-vm_error_t cargarPrograma(MV *mv, const char *ruta);
 
 /* Verifica si el registro IP apunta dentro de los límites del Segmento de Código. */
 int ipEnSegmentoDeCodigo(MV *mv);
