@@ -269,28 +269,24 @@ int xor(MV *mv){
 /* SWAP A, B  ->  intercambia los valores de A y B.
  * tres XOR seguidos: xor A, B   |   xor B, A   |   xor A, B
  * por eso el CC queda como lo dejo el ultimo XOR. */
+/* SWAP A, B  ->  intercambia los valores de A y B. */
 int swap(MV *mv){
-    uint32_t opA = mv->reg[OP1];
-    uint32_t opB = mv->reg[OP2];
-    int err;
+    int32_t a, b;
+    int err = leerAB(mv, &a, &b);
 
-    err = xor(mv);                       /* xor A, B */
+    if (err != OK)
+        return err;
 
-    if (err == OK) {
-        mv->reg[OP1] = opB;              /* xor B, A */
-        mv->reg[OP2] = opA;
-        err = xor(mv);
-    }
+    err = escribirOperando(mv, mv->reg[OP1], b);   /* A = B */
+    if (err != OK)
+        return err;
 
-    if (err == OK) {
-        mv->reg[OP1] = opA;              /* xor A, B */
-        mv->reg[OP2] = opB;
-        err = xor(mv);
-    }
+    err = escribirOperando(mv, mv->reg[OP2], a);   /* B = A */
+    if (err != OK)
+        return err;
 
-    mv->reg[OP1] = opA;                  /* dejo OP1 y OP2 como estaban */
-    mv->reg[OP2] = opB;
-    return err;
+    actualizarCCSimple(mv, b);    /* el CC queda segun el nuevo valor de A */
+    return OK;
 }
 
 /* SHL A, B  ->  A = A << B (entran ceros por la derecha).  Actualiza CC. */
@@ -1047,70 +1043,120 @@ int decodificarInstruccion(MV *mv, uint16_t dir, uint8_t *opc, uint32_t *opA, ui
 }
 
 
-/* Imprime un operando (en formato OP1/OP2) como en Assembler:
- *   registro   -> EAX
- *   inmediato  -> 10     (decimal, con signo)
- *   memoria    -> [DS+5] (registro base + desplazamiento con signo) */
 
-static void imprimirOperando(uint32_t op)
+/* Escribe en 'texto' un operando (en formato OP1/OP2) como en Assembler:
+ *   registro   -> EAX, AX, AH, AL, ...
+ *   inmediato  -> 10     (decimal, con signo)
+ *   memoria    -> l[DS+5] (modificador + registro base + desplazamiento con signo) */
+
+static void textoOperando(uint32_t op, char *texto)
 {
     uint8_t  tipo  = op >> 24;
     uint32_t valor = op & 0x00FFFFFF;
 
+    texto[0] = '\0';
+
     switch (tipo) {
-        case TIPO_REGISTRO:
-            printf("%s", nombreRegistro((uint8_t)valor));
+        case TIPO_REGISTRO: {
+            uint8_t reg = (uint8_t)valor & 0x1F;
+            uint8_t sec = SECTOR(valor);
+            if (reg >= EAX && reg <= EFX && sec != SECTOR_E) {
+                char letra = (char)('A' + (reg - EAX));
+                const char *sufijo = (sec == SECTOR_L) ? "L" : (sec == SECTOR_H) ? "H" : "X";
+                sprintf(texto, "%c%s", letra, sufijo);
+            } else {
+                sprintf(texto, "%s", nombreRegistro(reg));
+            }
             break;
+        }
         case TIPO_INMEDIATO:
-            printf("%d", (int16_t)valor);
+            sprintf(texto, "%d", (int16_t)valor);
             break;
         case TIPO_MEMORIA: {
             int16_t offset = (int16_t)(valor >> 8);   /* 2 bytes altos */
             uint8_t reg    = (uint8_t)(valor & 0xFF); /* byte bajo */
-            printf("[%s", nombreRegistro(reg));
-            if (offset > 0)      printf("+%d", offset);
-            else if (offset < 0) printf("%d", offset); /* el %d ya pone el '-' */
-            printf("]");
+            const char *prefijo = "";
+            switch ((reg >> 5) & 0x07) {
+                case 1: prefijo = "b"; break;
+                case 2: prefijo = "w"; break;
+                case 4: prefijo = "l"; break;
+            }
+            /* %+d siempre pone el signo: +0, +5, -4 */
+            sprintf(texto, "%s[%s%+d]", prefijo, nombreRegistro(reg), offset);
             break;
         }
     }
 }
 
-// Recorre el segmento de código y muestra cada instrucción con el formato
-//[0000] B1 00 0A 00 05 9B | ADD [DS+5], 10 
+// Recorre el Const Segment (si existe) y el Code Segment mostrando cada línea con el formato
+// >[002E] 9A 00 01 2E          | SHL          EL,          1
 void disassembler(MV *mv){
-    uint16_t segCod = (uint16_t)(mv->reg[CS] >> 16);
-    uint16_t dir = mv->tabla[segCod].base;
-    uint16_t fin = dir + mv->tabla[segCod].tamanio;
+    if (mv->reg[KS] != SEG_NULO) {
+        uint16_t segKs = (uint16_t)(mv->reg[KS] >> 16);
+        uint16_t dirKs = mv->tabla[segKs].base;
+        uint16_t finKs = dirKs + mv->tabla[segKs].tamanio;
+
+        while (dirKs < finKs) {
+            uint16_t len = 0;
+            while (dirKs + len < finKs && mv->mem[dirKs + len] != 0)
+                len++;
+            uint16_t tam = (dirKs + len < finKs) ? len + 1 : len; /* incluye el '\0' */
+
+            printf(" [%04X]", dirKs);
+            if (tam > 7) {
+                for (int i = 0; i < 6; i++)
+                    printf(" %02X", mv->mem[dirKs + i]);
+                printf(" ..");
+            } else {
+                for (int i = 0; i < tam; i++)
+                    printf(" %02X", mv->mem[dirKs + i]);
+                for (int i = tam; i < 7; i++)       /* relleno hasta 7 bytes */
+                    printf("   ");
+            }
+
+            printf(" | \"");
+            for (uint16_t i = 0; i < len; i++) {
+                uint8_t c = mv->mem[dirKs + i];
+                putchar((c >= 32 && c <= 126) ? (char)c : '.');
+            }
+            printf("\"\n");
+
+            dirKs += tam;
+        }
+    }
+
+    uint16_t segCod   = (uint16_t)(mv->reg[CS] >> 16);
+    uint16_t dir      = mv->tabla[segCod].base;
+    uint16_t fin      = dir + mv->tabla[segCod].tamanio;
+    uint16_t dirEntry = dir + (uint16_t)(mv->reg[IP] & 0xFFFF);
 
     while (dir < fin) {
         uint8_t  opc;
         uint32_t opA, opB;
+        char     textoA[24], textoB[24];
+        const char *nombre;
         int tam = decodificarInstruccion(mv, dir, &opc, &opA, &opB);
 
-        /* dirección física y bytes de la instrucción */
-        printf("[%04X]", dir);
+        /* '>' en el entry point (o espacio), dirección física y bytes de la instrucción */
+        printf("%c[%04X]", (dir == dirEntry) ? '>' : ' ', dir);
         for (int i = 0; i < tam; i++)
             printf(" %02X", mv->mem[dir + i]);
+        for (int i = tam; i < 7; i++)               /* relleno hasta 7 bytes */
+            printf("   ");
+        printf(" | ");
 
-        /* mnemónico */
-        if (mv->FUNCIONES[opc].func == NULL)
-            printf(" | ???");
+        /* mnemónico y operandos (alineados a la derecha en columnas de 11) */
+        nombre = (mv->FUNCIONES[opc].func == NULL) ? "???" : mv->FUNCIONES[opc].nombre;
+        textoOperando(opA, textoA);
+        textoOperando(opB, textoB);
+
+        if (opB != 0)
+            printf("%-4s%11s,%11s\n", nombre, textoA, textoB);
+        else if (opA != 0)
+            printf("%-4s%11s\n", nombre, textoA);
         else
-            printf(" | %s", mv->FUNCIONES[opc].nombre);
-
-        /* operandos */
-        if (opA != 0) {
-            printf(" ");
-            imprimirOperando(opA);
-        }
-        if (opB != 0) {
-            printf(", ");
-            imprimirOperando(opB);
-        }
-        printf("\n");
+            printf("%s\n", nombre);
 
         dir += tam;
     }
 }
-

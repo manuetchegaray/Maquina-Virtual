@@ -68,7 +68,7 @@ vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam){
         return ERR_MEMORIA;
 
     memset(mv->reg, 0, sizeof(mv->reg));
-    memset(mv->tabla, 0, sizeof(mv->tabla));      /* entradas sin usar: base 0, tamaño 0 */
+    memset(mv->tabla, 0xFF, sizeof(mv->tabla));   /* entradas sin usar: -1 (0xFFFFFFFF) */
 
     agregarSegmento(mv, &entrada, &base, tamParam,      PS);
     agregarSegmento(mv, &entrada, &base, cab->tamConst, KS);
@@ -376,7 +376,7 @@ int traducirDireccion(MV *mv, uint32_t dirLogica, int cantBytes, uint16_t *dirFi
     uint16_t seg = (uint16_t)(dirLogica >> 16);
     uint16_t off = (uint16_t)(dirLogica & 0xFFFF);
 
-    if (seg >= SEG_TABLE || mv->tabla[seg].tamanio == 0)
+       if (seg >= SEG_TABLE || (mv->tabla[seg].base == 0xFFFF && mv->tabla[seg].tamanio == 0xFFFF))
         return ERR_SEGMENTO;
 
     if (off + cantBytes > mv->tabla[seg].tamanio)
