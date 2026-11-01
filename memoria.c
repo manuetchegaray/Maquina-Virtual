@@ -64,7 +64,9 @@ vm_error_t armarSegmentos(MV *mv, const Cabecera *cab, uint16_t tamParam){
     int entrada = 0;
     uint32_t base = 0;
 
-    if (total > mv->tamMem)
+    /*las bases de la tabla son de 16 bits: el proceso tiene que
+    entrar en los primeros 64 KiB aunque la memoria sea mas grande */
+    if (total > mv->tamMem || total > 0x10000)
         return ERR_MEMORIA;
 
     memset(mv->reg, 0, sizeof(mv->reg));
