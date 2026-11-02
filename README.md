@@ -13,9 +13,8 @@ Compilacion
 Ejecucion
     vmx.exe [filename.vmx] [filename.vmi] [m=M] [-d] [-p param1 ... paramN]
 
- filename.vmx  programa en lenguaje maquina (version 1 o 2).
-    filename.vmi  archivo de imagen. Si se indica junto al .vmx, se genera en cada breakpoint (SYS F). Si se indica solo, se retoma la
-    ejecucion desde esa imagen.
+filename.vmx  programa en lenguaje maquina (version 1 o 2).
+filename.vmi  archivo de imagen. Si se indica junto al .vmx, se genera en cada breakpoint (SYS F). Si se indica solo, se retoma la ejecucion desde esa imagen.
     m=M          tamaño de la memoria principal en KiB (por defecto 16).
     -d            muestra el codigo desensamblado antes de ejecutarlo.
     -p            parametros para la subrutina principal (siempre al final).
