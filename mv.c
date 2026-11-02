@@ -421,10 +421,13 @@ static int saltarSi(MV *mv, int condicion){
 
 static void imprimirValorSegunModo(int32_t valor, uint32_t modo, int tam){
     uint32_t sinSigno = (uint32_t)valor &(tam < 4 ? ((1u << (tam * 8)) - 1) : 0xFFFFFFFFu);
+
+    /* para el decimal: el valor con el signo extendido segun el tamanio de la celda */
+    int32_t conSigno = (tam == 1) ? (int8_t)valor : (tam == 2) ? (int16_t)valor : valor;
     int b;
 
     if (modo & MODO_DECIMAL)
-        printf("%d ", valor);
+        printf("%d ", conSigno);
 
     if (modo & MODO_CARACTER)
         printf("%c ", (char)valor);
@@ -444,7 +447,7 @@ static void imprimirValorSegunModo(int32_t valor, uint32_t modo, int tam){
 
     /* si no se indico ningun modo valido, se muestra en decimal */
     if ((modo & (MODO_DECIMAL | MODO_CARACTER | MODO_OCTAL |MODO_HEXA | MODO_BINARIO)) == 0)
-        printf("%d ", valor);
+        printf("%d ", conSigno);
 }
 
 static int32_t leerValorSegunModo(uint32_t modo){
